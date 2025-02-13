@@ -4,11 +4,6 @@ class UAV:
     def __init__(self, uav_type: int,destinations: list[tuple] = [(0,0,0)], horizontal_accuracy: int = 0,vertical_accuracy: int = 0,speed_accuracy: int = 0):
         """
         Initialise a UAV object.
-
-        :param uav_list: List of current UAVs to which this UAV will be added
-        :param uav_type: Type of UAV (e.g., 0 for quadcopter, 1 for fixed-wing)
-        :param destinations: List of destinations (first is the origin)
-        :param requested_time: Time at which the UAV is requested to begin flight
         """
         if uav_type < 0 or 15 < uav_type:
             raise ValueError("Invalid UAV type. Must be between 0 - 15.")
@@ -18,10 +13,11 @@ class UAV:
         self.id = -1
         self.destinations = destinations
         self.units_moved = 0
+        self.times_waited = 0
         self.connected_asp = None
         self.current_position = self.destinations[0]
         self.planned_route = self.destinations[0:]
-
+        self.finished = False
         self.operational_status = 0
         self.horizontal_accuracy = horizontal_accuracy
         self.vertical_accuracy = vertical_accuracy
@@ -47,14 +43,39 @@ class UAV:
         """
         Resets the UAV to its initial state.
         """
+        self.units_moved = 0
+        self.finished = False
         self.current_position = self.destinations[0]
-        self.planned_route = self.destinations[1:]
+        self.planned_route = self.destinations[:]
         self.operational_status = 0
 
     def move(self):
         """
         Moves the UAV to the next position in its planned route.
         """
+        self.operational_status = 1
         self.units_moved = (self.units_moved + 1) % len(self.planned_route)
         self.current_position = self.planned_route[self.units_moved]
+    
+    def assign_path(self,new_path:list[tuple]):
+        """
+        Assigns a new path to the UAV.
+        """
+        self.planned_route = new_path
+        self.units_moved = 0
+        self.current_position = self.planned_route[0]
+    
+    def wait(self):
+        self.operational_status = 0
+        self.times_waited += 1
+
+    def is_finished(self):
+        """
+        Checks if the UAV has reached its final destination.
+        """
+        if not self.finished:
+            if self.units_moved == len(self.planned_route) - 1:
+                self.finished = True
+                
+        return self.finished
         

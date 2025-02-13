@@ -34,26 +34,32 @@ class Environment:
         self.collisions_map = None
         self.timestep:int = 0
 
+
+        self.candidate_paths: dict = {}
+        # The currently active candidate ID
+        self.active_candidate: Optional[int] = None
+
         self._uav_location_plots = None
         self._planned_routes_plots = None
         self._destination_plots = None
         self._world_voxels = None
         self._collision_voxels = None
-        self._uav_voxels = None
         self._asp_coverage_voxels = None
 
 
     def reset_environment(self) -> None:
         """
         Reset the environment's simulation state to its initial conditions.
-        (This method does not close the figure window; that is handled in the reset callback.)
         """
         self.timestep = 0
         for uav in self.uav_list:
             uav.reset_uav()
         self.states = []
         self.leased_airspace = []
-        self.collisions_map = None
+        self.collisions_map = np.zeros(self.world_data.shape, dtype=bool)
+        self.asp_coverage: np.ndarray = np.empty(self.world_data.shape, dtype=object)
+        for idx in np.ndindex(self.asp_coverage.shape):
+            self.asp_coverage[idx] = []
         
         self._uav_location_plots = None
         self._planned_routes_plots = None
@@ -61,7 +67,6 @@ class Environment:
         self._destination_plots = None
         self._world_voxels = None
         self._collision_voxels = None
-        self._uav_voxels = None
         self._asp_coverage_artists = None
 
 
@@ -70,7 +75,28 @@ class Environment:
         """
         Run the simulation.
         """
+        timestep = 0
+        finished = 0
+        uav_count = len(self.uav_list)
+        while not finished == uav_count:
+            finished = 0
+            for uav in self.uav_list:
+                if uav.is_finished():
+                    finished += 1
+                else:
+                    uav.move()
+            timestep += 1
+        times_waited = sum([uav.times_waited for uav in self.uav_list])
+        print(f"Simulation finished in {timestep} timesteps. Total time waited: {times_waited}")
+                
+                
+
+    def run_with_display(self) -> None:
+        """
+        Run the simulation with a display.
+        """
         self._uav_map()
+        self.detect_collisions()
         self.display()
 
     def register_asp(self, new_asp: Any) -> None:
@@ -130,11 +156,8 @@ class Environment:
         self._display_planned_routes(axis)
         self._display_destinations(axis)
         self._display_asp_coverage(axis)
-        
         self._uav_map()
-        self.detect_collisions()
         self._display_collisions(axis)
-        self._display_uav_map(axis)
         
         PLT.show()
         
@@ -153,26 +176,32 @@ class Environment:
         This callback closes the current figure, resets internal state, and re-displays the simulation.
         """
         self.reset_environment()
+        self.detect_collisions()
         self._update_display(axis,fig)
 
     def _update_display(self,axis: Any,fig:Any) -> None:
         """
         Update the display with the current simulation state.
         """
+        self._remove_displayed_world(axis)
+        self._remove_displayed_uavs(axis)
+        self._remove_displayed_planned_routes(axis)
+        self._remove_displayed_destination_plots(axis)
+        self._remove_displayed_asp_coverage(axis)
+        self._remove_displayed_collisions(axis)
+        axis.clear()
+        axis.set_xlim(0, self.world_data.shape[0])
+        axis.set_ylim(0, self.world_data.shape[2])
+        axis.set_zlim(0, self.world_data.shape[1])
+        axis.view_init(elev=90, azim=-90)
+        self._display_asp_coverage(axis)
         self._display_world(axis)
-        self._display_uavs(axis)
         self._display_planned_routes(axis)
         self._display_destinations(axis)
-        self._display_asp_coverage(axis)
-        
-
-        self.detect_collisions()
         self._display_collisions(axis)
         self._uav_map()
-        self._display_uav_map(axis)
-
+        self._display_uavs(axis)
         fig.canvas.draw()
-
 
     def next_timestep(self) -> None:
         """
@@ -218,11 +247,7 @@ class Environment:
         Display the simulation world (obstacles) using voxels.
         Clears any previous world drawings before redrawing.
         """
-        # Remove previously drawn world voxels, if any.
-        if hasattr(self, '_world_voxels') and self._world_voxels is not None:
-            for artist in self._world_voxels.values():
-                artist.remove()
-            self._world_voxels = None
+        self._remove_displayed_world(axis)
 
         face_color = mcolors.to_rgba('grey')
         edge_color = face_color[:3] + (0.01,)
@@ -233,18 +258,29 @@ class Environment:
             edgecolors=edge_color,
             alpha=0.8
         )
-
-    def _display_asp_coverage(self, axis: Any) -> None:
+    
+    def _remove_displayed_world(self, axis: Any) -> None:
         """
-        Display the ASP coverage map.
-        Clears any previous ASP coverage drawings before redrawing.
+        Remove the displayed world voxels from the axis.
         """
+        if hasattr(self, '_world_voxels') and self._world_voxels is not None:
+            for artist in self._world_voxels.values():
+                artist.remove()
+            self._world_voxels = None
+    
+    def _remove_displayed_asp_coverage(self, axis: Any) -> None:
         if hasattr(self, '_asp_coverage_artists') and self._asp_coverage_artists is not None:
             for art_dict in self._asp_coverage_artists:
                 for artist in art_dict.values():
                     artist.remove()
             self._asp_coverage_artists = []
 
+    def _display_asp_coverage(self, axis: Any) -> None:
+        """
+        Display the ASP coverage map.
+        Clears any previous ASP coverage drawings before redrawing.
+        """
+        self._remove_displayed_asp_coverage(axis)
         self._asp_coverage_artists = []
         for asp in self.asp_list:
             mask = np.zeros(self.render_world_data.shape, dtype=bool)
@@ -258,17 +294,21 @@ class Environment:
                 art_dict = axis.voxels(mask, facecolors=face_color, edgecolors=edge_color, alpha=0.1)
                 self._asp_coverage_artists.append(art_dict)
 
+    def _remove_displayed_asps(self,axis: Any) -> None:
+        """
+        Remove the displayed ASPs from the axis.
+        """
+        if hasattr(self, '_asps_plots') and self._asps_plots is not None:
+            for artist in self._asps_plots:
+                artist.remove()
+            self._asps_plots = None
 
     def _display_asps(self, axis: Any) -> None:
         """
         Plot the positions of ASPs on the axis.
         Clears any previous ASP drawings before redrawing.
         """
-        if hasattr(self, '_asps_plots') and self._asps_plots is not None:
-            for artist in self._asps_plots:
-                artist.remove()
-            self._asps_plots = []
-
+        self._remove_displayed_asps(axis)
         self._asps_plots = []
         for asp in self.asp_list:
             # Note: swapping y and z to match the display conventions
@@ -287,21 +327,26 @@ class Environment:
         """
         Display the UAVs in the simulation.
         """
-        if self._uav_location_plots is not None:
-            self._uav_location_plots.remove()
+        self._remove_displayed_uavs(axis)
         positions = np.array([uav.current_position for uav in self.uav_list])
         colours = [colour_chart[uav.id] for uav in self.uav_list]
         self._uav_location_plots = axis.scatter(positions[:, 0] + 0.5, positions[:, 2] + 0.5,positions[:, 1] + 0.5,
                                     c=colours, s=50)
     
+    def _remove_displayed_uavs(self, axis: Any) -> None:
+        if self._uav_location_plots is not None:
+            try:
+                self._uav_location_plots.remove()
+            except ValueError:
+                pass
+            self._uav_location_plots = None
+
+    
     def _display_planned_routes(self,axis: Any) -> None:
         """
         Display the planned routes of the UAVs.
         """
-        if self._planned_routes_plots is not None:
-            for line in self._planned_routes_plots:
-                line.remove()
-        self._planned_routes_plots = []
+        self._remove_displayed_planned_routes(axis)
         for uav in self.uav_list:
             if uav.planned_route:
                 route = [uav.destinations[0]] + uav.planned_route
@@ -314,16 +359,18 @@ class Environment:
                     linestyle='--'
                 )
                 self._planned_routes_plots.extend(line)
-        
+
+    def _remove_displayed_planned_routes(self,axis: Any) -> None:
+        if self._planned_routes_plots is not None:
+            for line in self._planned_routes_plots:
+                line.remove()
+        self._planned_routes_plots = []
             
     def _display_destinations(self,axis: Any) -> None:
         """
         Display the destinations of the UAVs as numbers.
         """
-        if self._destination_plots is not None:
-            for text in self._destination_plots:
-                text.remove()
-        self._destination_plots = []
+        self._remove_displayed_destination_plots(axis)
         for uav in self.uav_list:
             for idx, destination in enumerate(uav.destinations):
                 text = axis.text(
@@ -335,7 +382,13 @@ class Environment:
                     fontsize=8
                 )
                 self._destination_plots.append(text)
-
+    
+    def _remove_displayed_destination_plots(self,axis: Any) -> None:
+        if self._destination_plots is not None:
+            for text in self._destination_plots:
+                text.remove()
+        self._destination_plots = []
+    
     def _uav_map(self) -> None:
         """
         Clear and repopulate the UAV map based on the current positions and inaccuracy of each UAV.
@@ -381,46 +434,7 @@ class Environment:
                 self.collisions_map[idx] = True
             else:
                 self.collisions_map[idx] = False
-
-    def _display_uav_map(self, axis: Any) -> None:
-        """
-        Display the UAV map by overlaying a semi-transparent voxel plot on the regions
-        where UAVs are detected. Each voxel is colored according to the first UAV present.
-        """
-        if hasattr(self, '_uav_voxels') and self._uav_voxels is not None:
-            for artist_dict in self._uav_voxels.values():
-                for artist in artist_dict.values():
-                    artist.remove()
-            self._uav_voxels = {}
-        
-        has_uav = any(len(self.uav_map[idx]) > 0 for idx in np.ndindex(self.uav_map.shape))
-        if not has_uav:
-            return
-
-        map_copy = np.copy(self.uav_map).transpose(0, 2, 1)
-        self._uav_voxels = {}
-        for idx in np.ndindex(self.uav_map.shape):
-            if not self.uav_map[idx]:
-                continue
-
-            colour = colour_chart[self.uav_map[idx][0]]
-
-            mask = np.zeros(self.uav_map.shape, dtype=bool)
-            mask[idx] = True
-
-            base_rgba = mcolors.to_rgba(colour)
-            edge_rgba = (base_rgba[0], base_rgba[1], base_rgba[2], 0.1)
-
-            voxel_artists = axis.voxels(
-                mask.transpose(0, 2, 1),
-                facecolors=base_rgba,
-                edgecolors=edge_rgba,
-                alpha=0.5
-            )
-            self._uav_voxels[idx] = voxel_artists
-
-
-
+    
     def _display_collisions(self, axis: Any) -> None:
         """
         Display the collisions in the simulation by overlaying a semi-transparent
@@ -434,12 +448,7 @@ class Environment:
             self.detect_collisions()
 
         collision_mask = self.collisions_map.transpose(0, 2, 1)
-        
-
-        if hasattr(self, '_collisions_voxels') and self._collision_voxels is not None:
-            for artist in self._collision_voxels.values():
-                artist.remove()
-            self._collision_voxels = None
+        self._remove_displayed_collisions(axis)
         
         if collision_mask.any():
             self._collision_voxels = axis.voxels(
@@ -448,6 +457,12 @@ class Environment:
                 edgecolors='darkred',
                 alpha=0.5
             )
+
+    def _remove_displayed_collisions(self,axis: Any):
+         if hasattr(self, '_collision_voxels') and self._collision_voxels is not None:
+            for artist in self._collision_voxels.values():
+                artist.remove()
+            self._collision_voxels = None
 
 
     @staticmethod
