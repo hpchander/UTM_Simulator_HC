@@ -3,6 +3,7 @@ import math as Math
 import matplotlib.pyplot as PLT
 import matplotlib.widgets as WDG
 from abc import ABC, abstractmethod
+import csv
 
 def byte_packer(high,low):
     """

@@ -1,50 +1,30 @@
 from typing import Any, List, Optional
 from simulator.utils.shared_imports import np, Math, PLT, colour_chart,WDG
 import matplotlib.colors as mcolors
-
+from simulator.environment.display import DisplayManager
 
 class Environment:
-    def __init__(
-        self,
-        world_data: np.ndarray
-    ) -> None:
-        """
-        Initialize the simulation environment.
-
-        Args:
-            world_data (np.ndarray): A 3D numpy array representing the simulation world.
-            asp_list (Optional[List[Any]]): List of ASP objects (default is None).
-            uav_list (Optional[List[Any]]): List of UAV objects (default is None).
-        """
+    def __init__(self, world_data: np.ndarray,uav_mode: str = "wait-on-pass") -> None:
         self.world_data: np.ndarray = world_data
         self.render_world_data: np.ndarray = np.swapaxes(self.world_data, 1, 2)
         self.asp_list: List[Any] = []
         self.uav_list: List[Any] = []
-
-        # Initialize asp_coverage as an array of lists (one list per voxel)
         self.asp_coverage: np.ndarray = np.empty(self.world_data.shape, dtype=object)
         for idx in np.ndindex(self.asp_coverage.shape):
             self.asp_coverage[idx] = []
-
         self.map_asp_coverage()
-        self.render_asp_coverage: np.ndarray = np.swapaxes(self.asp_coverage, 1, 2)
+        
         self.uav_map: np.ndarray = np.empty(self.world_data.shape, dtype=object)
         self.states: List[np.ndarray] = []
-        self.leased_airspace: List[np.ndarray] = []
         self.collisions_map = None
-        self.timestep:int = 0
-
+        self.timestep: int = 0
 
         self.candidate_paths: dict = {}
-        # The currently active candidate ID
-        self.active_candidate: Optional[int] = None
+        self.active_candidate_path: Optional[int] = None
+        self.schedule_index: int = 0
+        self.uav_mode = uav_mode
 
-        self._uav_location_plots = None
-        self._planned_routes_plots = None
-        self._destination_plots = None
-        self._world_voxels = None
-        self._collision_voxels = None
-        self._asp_coverage_voxels = None
+        self.display_manager = None
 
 
     def reset_environment(self) -> None:
@@ -55,49 +35,78 @@ class Environment:
         for uav in self.uav_list:
             uav.reset_uav()
         self.states = []
-        self.leased_airspace = []
-        self.collisions_map = np.zeros(self.world_data.shape, dtype=bool)
-        self.asp_coverage: np.ndarray = np.empty(self.world_data.shape, dtype=object)
-        for idx in np.ndindex(self.asp_coverage.shape):
-            self.asp_coverage[idx] = []
-        
-        self._uav_location_plots = None
-        self._planned_routes_plots = None
-        self._asps_plots = None
-        self._destination_plots = None
-        self._world_voxels = None
-        self._collision_voxels = None
-        self._asp_coverage_artists = None
-
-
-
-    def run(self) -> None:
-        """
-        Run the simulation.
-        """
-        timestep = 0
-        finished = 0
-        uav_count = len(self.uav_list)
-        while not finished == uav_count:
-            finished = 0
-            for uav in self.uav_list:
-                if uav.is_finished():
-                    finished += 1
-                else:
-                    uav.move()
-            timestep += 1
-        times_waited = sum([uav.times_waited for uav in self.uav_list])
-        print(f"Simulation finished in {timestep} timesteps. Total time waited: {times_waited}")
-                
-                
-
-    def run_with_display(self) -> None:
-        """
-        Run the simulation with a display.
-        """
+        self.uav_map = np.empty(self.world_data.shape, dtype=object)
         self._uav_map()
         self.detect_collisions()
-        self.display()
+        
+
+
+    def add_candidate(self, candidate_id: int, schedule: dict) -> None:
+        """
+        Add a candidate schedule.
+        
+        schedule: dict where keys are UAV IDs and values are lists of waypoints.
+        """
+        self.candidate_paths[candidate_id] = schedule
+
+    def set_active_candidate_path(self, candidate_id: int) -> None:
+        """
+        Set the active candidate path and update each UAV's planned_route accordingly.
+        """
+        if candidate_id not in self.candidate_paths:
+            raise ValueError(f"Candidate path {candidate_id} not found.")
+        self.active_candidate_path = candidate_id
+        candidate = self.candidate_paths[candidate_id]
+        for uav in self.uav_list:
+            # If a candidate route exists for the UAV, use it.
+            if uav.id in candidate:
+                uav.planned_route = candidate[uav.id]
+            else:
+                print(f"Warning: No candidate path found for UAV {uav.id}. Check environment setup")
+                return
+        self.states = []
+        self.timestep = 0
+        self.uav_map = np.empty(self.world_data.shape, dtype=object)
+
+        self._uav_map()
+        self.detect_collisions()
+
+    def detect_completed(self) -> bool:
+        """
+        Check if all UAVs have reached their final destination.
+        """
+        return all(uav.is_finished() for uav in self.uav_list)
+
+    def run(self, output_mode=0) -> None:
+        """
+        Run the simulation using next_timestep() until all UAVs have finished.
+        """
+        consecutive_no_moves = 0
+        total_movements = 0
+        collisions = 0
+        while not all(uav.is_finished() for uav in self.uav_list):
+            
+            moves_made = self.next_timestep(output_mode=output_mode)
+            total_movements += moves_made
+            collisions += self.collision_count()
+
+            if moves_made == 0:
+                consecutive_no_moves += 1
+            else:
+                consecutive_no_moves = 0
+            
+            if consecutive_no_moves > 2:
+                #print("Deadlock detected. Exiting.")
+                break
+        
+        total_waited = sum(uav.times_waited for uav in self.uav_list)
+        if self.detect_completed():
+            #print(f"Simulation finished in {self.timestep} timesteps. Total movements: {total_movements} Total time waited: {total_waited}")
+            return {"success": True,"timesteps": self.timestep, "movements": total_movements, "waited": total_waited, "collisions": collisions}
+        else:
+            if (2 <= consecutive_no_moves): 
+                #print(f"Simulation finished in {self.timestep} timesteps. Total movements: {total_movements} Total time waited: {total_waited}")
+                return {"success": False,"timesteps": self.timestep, "movements": total_movements, "waited": total_waited, "collisions": collisions}
 
     def register_asp(self, new_asp: Any) -> None:
         """Register an ASP object."""
@@ -122,13 +131,12 @@ class Environment:
         self.uav_list.append(new_uav)
 
     def display(self) -> None:
-        """
-        Display the simulation, including the world, ASP coverage, and ASP positions.
-        """
-        # Create the figure and axis for display
+        self._uav_map()
+        self.detect_collisions()
+        self.display_manager = DisplayManager(self)
         fig = PLT.figure(figsize=(15, 20))
-        axis = self._setup_display(fig, self.render_world_data)
-        #next button
+        axis = self.display_manager.setup_display(fig, self.render_world_data)
+        # Set up your next and reset buttons as before...
         next_button_axes = fig.add_axes([0.1, 0.25, 0.2, 0.1])
         next_button_axes.set_xticks([])
         next_button_axes.set_yticks([])
@@ -138,8 +146,7 @@ class Environment:
             color='lightblue',
             hovercolor='lightgreen'
         )
-        next_button.on_clicked(lambda event: self.on_next_button_click(axis,fig))
-        #reset button
+        next_button.on_clicked(lambda event: self.on_next_button_click(axis, fig))
         reset_button_axes = fig.add_axes([0.1, 0.5, 0.2, 0.1])
         reset_button_axes.set_xticks([])
         reset_button_axes.set_yticks([])
@@ -149,69 +156,95 @@ class Environment:
             color='lightblue',
             hovercolor='lightgreen'
         )
-        reset_button.on_clicked(lambda event: self.on_reset_button_click(axis,fig))
-        # Display different simulation elements
-        self._display_world(axis)
-        self._display_uavs(axis)
-        self._display_planned_routes(axis)
-        self._display_destinations(axis)
-        self._display_asp_coverage(axis)
-        self._uav_map()
-        self._display_collisions(axis)
+        reset_button.on_clicked(lambda event: self.on_reset_button_click(axis, fig))
+        # Delegate display to the display manager:
+        self.display_manager.start_display(axis, fig)
         
-        PLT.show()
-        
-    def on_next_button_click(self,axis,fig) -> None:
-        """
-        Progress the simulation by one timestep when the button is clicked.
-        """
+    def on_next_button_click(self, axis, fig) -> None:
         self.next_timestep()
         self._uav_map()
         self.detect_collisions()
-        self._update_display(axis,fig)
+        self.display_manager.update_display(axis, fig)
 
-    def on_reset_button_click(self, axis,fig) -> None:
-        """
-        Reset the environment when the reset button is clicked.
-        This callback closes the current figure, resets internal state, and re-displays the simulation.
-        """
+    def on_reset_button_click(self, axis, fig) -> None:
         self.reset_environment()
         self.detect_collisions()
-        self._update_display(axis,fig)
+        self.display_manager.update_display(axis, fig)
 
-    def _update_display(self,axis: Any,fig:Any) -> None:
-        """
-        Update the display with the current simulation state.
-        """
-        self._remove_displayed_world(axis)
-        self._remove_displayed_uavs(axis)
-        self._remove_displayed_planned_routes(axis)
-        self._remove_displayed_destination_plots(axis)
-        self._remove_displayed_asp_coverage(axis)
-        self._remove_displayed_collisions(axis)
-        axis.clear()
-        axis.set_xlim(0, self.world_data.shape[0])
-        axis.set_ylim(0, self.world_data.shape[2])
-        axis.set_zlim(0, self.world_data.shape[1])
-        axis.view_init(elev=90, azim=-90)
-        self._display_asp_coverage(axis)
-        self._display_world(axis)
-        self._display_planned_routes(axis)
-        self._display_destinations(axis)
-        self._display_collisions(axis)
-        self._uav_map()
-        self._display_uavs(axis)
-        fig.canvas.draw()
-
-    def next_timestep(self) -> None:
-        """
-        Progress time by one timestep.
-        """
+    
+    def next_timestep(self, output_mode=0) -> int:
+        if self.detect_completed():
+            return 0
         self.states.append(np.copy(self.uav_map))
         self.timestep += 1
+        moves_made = 0
+        # Precompute current positions and intended positions
+        current_positions = {uav.id: uav.current_position for uav in self.uav_list if not uav.is_finished() or self.timestep < uav.start_time}
+        intended_positions = {uav.id: uav.get_next_position() for uav in self.uav_list if not uav.is_finished() or self.timestep < uav.start_time}
+        if output_mode == 0:
+            print(f"Time {self.timestep}")
+        # Build a candidate occupancy map: voxel -> list of UAV IDs planning to occupy that voxel.
+        candidate_map = np.empty(self.uav_map.shape, dtype=object)
+        for idx in np.ndindex(self.uav_map.shape):
+            candidate_map[idx] = []
         for uav in self.uav_list:
-            uav.connect_to_asp(self.asp_list)
-            uav.move()
+            if self.timestep < uav.start_time:
+                continue
+            if uav.is_finished():
+                continue
+            footprint = self.compute_footprint(uav, intended_positions[uav.id])
+            for voxel in footprint:
+                candidate_map[voxel].append(uav.id)
+        if self.uav_mode == "wait-on-pass":
+            moves_made = self.wait_on_pass(intended_positions, candidate_map, current_positions, output_mode=output_mode)
+        return moves_made
+
+        
+    def wait_on_pass(self,intended_positions,candidate_map,current_positions, output_mode = 0) -> None:
+        # Resolve conflicts: For each UAV, check if any voxel in its footprint has multiple candidates.
+        # If so, choose one UAV per voxel (e.g., with lowest ID) to be allowed.
+        moves_made = 0
+        allowed_moves = {}  # UAV id -> True if allowed to move
+        for uav in self.uav_list:
+            if uav.is_finished():
+                continue
+            if self.timestep < uav.start_time:
+                continue
+            allowed_moves[uav.id] = True  # assume allowed until conflict found
+
+            footprint = self.compute_footprint(uav, intended_positions[uav.id])
+            for voxel in footprint:
+                if len(candidate_map[voxel]) > 1:
+                    # Resolve conflict: allow UAV with lowest ID
+                    allowed_uav = min(candidate_map[voxel])
+                    if uav.id != allowed_uav:
+                        allowed_moves[uav.id] = False
+                        break
+                # Update positions
+        for uav in self.uav_list:
+            if uav.is_finished():
+                continue
+            for other in self.uav_list:
+                if other.is_finished() or uav.id == other.id:
+                    continue
+                if (intended_positions[uav.id] == current_positions[other.id] and
+                    intended_positions[other.id] == current_positions[uav.id]):
+                    # both are trying to swap positions.
+                    allowed_moves[uav.id] = False
+                    allowed_moves[other.id] = False
+        for uav in self.uav_list:
+            if uav.is_finished():
+                continue
+            if allowed_moves[uav.id]:
+                if output_mode == 0:
+                    print(f"UAV {uav.id} moving to {intended_positions[uav.id]}")
+                moves_made += 1
+                uav.move()
+            else:
+                if output_mode == 0:
+                    print(f"UAV {uav.id} waiting at {current_positions[uav.id]}")
+                uav.wait()
+        return moves_made
     
     def map_asp_coverage(self) -> None:
         """
@@ -240,154 +273,29 @@ class Environment:
                             (z - position[2]) ** 2
                         )
                         if distance <= radius:
-                            self.asp_coverage[x, y, z].append(asp.id)
+                            self.asp_coverage[x, y, z].append(asp.id)    
 
-    def _display_world(self, axis: Any) -> None:
+    def compute_footprint(self, uav, pos: tuple) -> List[tuple]:
         """
-        Display the simulation world (obstacles) using voxels.
-        Clears any previous world drawings before redrawing.
+        Given a UAV and a target position, return a list of voxel indices
+        that the UAV would occupy based on its inaccuracies.
         """
-        self._remove_displayed_world(axis)
-
-        face_color = mcolors.to_rgba('grey')
-        edge_color = face_color[:3] + (0.01,)
-        # Draw the world voxels and store the returned dictionary of artists.
-        self._world_voxels = axis.voxels(
-            self.render_world_data,
-            facecolors=face_color,
-            edgecolors=edge_color,
-            alpha=0.8
-        )
-    
-    def _remove_displayed_world(self, axis: Any) -> None:
-        """
-        Remove the displayed world voxels from the axis.
-        """
-        if hasattr(self, '_world_voxels') and self._world_voxels is not None:
-            for artist in self._world_voxels.values():
-                artist.remove()
-            self._world_voxels = None
-    
-    def _remove_displayed_asp_coverage(self, axis: Any) -> None:
-        if hasattr(self, '_asp_coverage_artists') and self._asp_coverage_artists is not None:
-            for art_dict in self._asp_coverage_artists:
-                for artist in art_dict.values():
-                    artist.remove()
-            self._asp_coverage_artists = []
-
-    def _display_asp_coverage(self, axis: Any) -> None:
-        """
-        Display the ASP coverage map.
-        Clears any previous ASP coverage drawings before redrawing.
-        """
-        self._remove_displayed_asp_coverage(axis)
-        self._asp_coverage_artists = []
-        for asp in self.asp_list:
-            mask = np.zeros(self.render_world_data.shape, dtype=bool)
-            for idx in np.ndindex(self.render_asp_coverage.shape):
-                if asp.id in self.render_asp_coverage[idx]:
-                    mask[idx] = True
-
-            if mask.any():
-                face_color = mcolors.to_rgba(colour_chart[asp.id])
-                edge_color = face_color[:3] + (0.01,)
-                art_dict = axis.voxels(mask, facecolors=face_color, edgecolors=edge_color, alpha=0.1)
-                self._asp_coverage_artists.append(art_dict)
-
-    def _remove_displayed_asps(self,axis: Any) -> None:
-        """
-        Remove the displayed ASPs from the axis.
-        """
-        if hasattr(self, '_asps_plots') and self._asps_plots is not None:
-            for artist in self._asps_plots:
-                artist.remove()
-            self._asps_plots = None
-
-    def _display_asps(self, axis: Any) -> None:
-        """
-        Plot the positions of ASPs on the axis.
-        Clears any previous ASP drawings before redrawing.
-        """
-        self._remove_displayed_asps(axis)
-        self._asps_plots = []
-        for asp in self.asp_list:
-            # Note: swapping y and z to match the display conventions
-            x, y, z = asp.position
-            line, = axis.plot(
-                [x],
-                [z],
-                [y],
-                marker='o',
-                markersize=5,
-                color=colour_chart[asp.id]
-            )
-            self._asps_plots.append(line)
-    
-    def _display_uavs(self,axis: Any) -> None:
-        """
-        Display the UAVs in the simulation.
-        """
-        self._remove_displayed_uavs(axis)
-        positions = np.array([uav.current_position for uav in self.uav_list])
-        colours = [colour_chart[uav.id] for uav in self.uav_list]
-        self._uav_location_plots = axis.scatter(positions[:, 0] + 0.5, positions[:, 2] + 0.5,positions[:, 1] + 0.5,
-                                    c=colours, s=50)
-    
-    def _remove_displayed_uavs(self, axis: Any) -> None:
-        if self._uav_location_plots is not None:
-            try:
-                self._uav_location_plots.remove()
-            except ValueError:
-                pass
-            self._uav_location_plots = None
-
-    
-    def _display_planned_routes(self,axis: Any) -> None:
-        """
-        Display the planned routes of the UAVs.
-        """
-        self._remove_displayed_planned_routes(axis)
-        for uav in self.uav_list:
-            if uav.planned_route:
-                route = [uav.destinations[0]] + uav.planned_route
-                planned_route = np.array(route)
-                line = axis.plot(
-                    planned_route[:, 0] + 0.5,
-                    planned_route[:, 2] + 0.5,
-                    planned_route[:, 1] + 0.5,
-                    color=colour_chart[uav.id],
-                    linestyle='--'
-                )
-                self._planned_routes_plots.extend(line)
-
-    def _remove_displayed_planned_routes(self,axis: Any) -> None:
-        if self._planned_routes_plots is not None:
-            for line in self._planned_routes_plots:
-                line.remove()
-        self._planned_routes_plots = []
-            
-    def _display_destinations(self,axis: Any) -> None:
-        """
-        Display the destinations of the UAVs as numbers.
-        """
-        self._remove_displayed_destination_plots(axis)
-        for uav in self.uav_list:
-            for idx, destination in enumerate(uav.destinations):
-                text = axis.text(
-                    destination[0] + 0.6,
-                    destination[2] + 0.6,
-                    destination[1] + 0.5,
-                    f"{idx}",
-                    color=colour_chart[uav.id],
-                    fontsize=8
-                )
-                self._destination_plots.append(text)
-    
-    def _remove_displayed_destination_plots(self,axis: Any) -> None:
-        if self._destination_plots is not None:
-            for text in self._destination_plots:
-                text.remove()
-        self._destination_plots = []
+        x, y, z = pos
+        horiz = uav.horizontal_accuracy if hasattr(uav, 'horizontal_accuracy') else 0
+        vert = uav.vertical_accuracy if hasattr(uav, 'vertical_accuracy') else 0
+        footprint = []
+        # Convert position to integer voxel indices (assumes positions are given in same units as voxel indices)
+        x_min = max(0, int(x - horiz))
+        x_max = min(self.uav_map.shape[0] - 1, int(x + horiz))
+        y_min = max(0, int(y - vert))
+        y_max = min(self.uav_map.shape[1] - 1, int(y + vert))
+        z_min = max(0, int(z - horiz))
+        z_max = min(self.uav_map.shape[2] - 1, int(z + horiz))
+        for i in range(x_min, x_max + 1):
+            for j in range(y_min, y_max + 1):
+                for k in range(z_min, z_max + 1):
+                    footprint.append((i, j, k))
+        return footprint
     
     def _uav_map(self) -> None:
         """
@@ -429,63 +337,17 @@ class Environment:
 
         for idx in np.ndindex(self.uav_map.shape):
             if len(self.uav_map[idx]) > 1:
+                for uav_id in self.uav_map[idx]:
+                    if self.uav_list[uav_id].is_finished():
+                        continue
                 self.collisions_map[idx] = True
             elif self.world_data[idx] == 1 and len(self.uav_map[idx]) > 0:
                 self.collisions_map[idx] = True
             else:
                 self.collisions_map[idx] = False
-    
-    def _display_collisions(self, axis: Any) -> None:
+
+    def collision_count(self) -> int:
         """
-        Display the collisions in the simulation by overlaying a semi-transparent
-        red voxel plot on the regions where collisions are detected.
-
-        This function uses the boolean array self.collisions_map, which should be
-        computed (for example, by calling self.detect_collisions()) prior to display.
-        Voxels with a collision (True values) are highlighted in red.
+        Count the number of collisions in the current state.
         """
-        if not hasattr(self, 'collisions_map'):
-            self.detect_collisions()
-
-        collision_mask = self.collisions_map.transpose(0, 2, 1)
-        self._remove_displayed_collisions(axis)
-        
-        if collision_mask.any():
-            self._collision_voxels = axis.voxels(
-                collision_mask,
-                facecolors='red',
-                edgecolors='darkred',
-                alpha=0.5
-            )
-
-    def _remove_displayed_collisions(self,axis: Any):
-         if hasattr(self, '_collision_voxels') and self._collision_voxels is not None:
-            for artist in self._collision_voxels.values():
-                artist.remove()
-            self._collision_voxels = None
-
-
-    @staticmethod
-    def _setup_display(fig: Any, render_data: np.ndarray) -> Any:
-        """
-        Set up the 3D display axis.
-        
-        Args:
-            fig (Any): The matplotlib figure.
-            render_data (np.ndarray): Data used to set axis limits.
-        
-        Returns:
-            Any: The configured 3D axis.
-        """
-        axis = fig.add_subplot(111, projection='3d')
-        axis.set_title("ASP Coverage Map")
-        axis.set_xlabel("X")
-        axis.set_ylabel("Z")
-        axis.set_zlabel("Y")
-        axis.set_xlim(0, render_data.shape[0])
-        axis.set_ylim(0, render_data.shape[1])
-        axis.set_zlim(0, render_data.shape[2])
-        axis.view_init(elev=90, azim=-90)
-        return axis
-
-            
+        return np.sum(self.collisions_map)

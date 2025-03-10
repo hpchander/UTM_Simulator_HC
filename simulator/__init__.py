@@ -5,4 +5,4 @@ from .uav.uav import UAV
 from .collision.collision import CollisionDetector
 from .maps.maps import map1
 from .scheduler.scheduler import Scheduler
-from .path_planner.path_planner import PathPlanner
+from .path_planner.path_planner import AStarPlanner
