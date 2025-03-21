@@ -1,7 +1,7 @@
 import matplotlib.pyplot as PLT
 import matplotlib.colors as mcolors
-import numpy as np
-from simulator.utils.shared_imports import colour_chart, WDG
+import skimage as skim
+from simulator.utils.shared_imports import colour_chart, WDG, np
 
 class DisplayManager:
     def __init__(self, environment):
@@ -14,7 +14,7 @@ class DisplayManager:
         self._asp_coverage_artists = []
         self._asps_plots = None
         self.render_asp_coverage: np.ndarray = np.swapaxes(self.env.asp_coverage, 1, 2)
-
+        self._uav_footprints = []
     def setup_display(self, fig, render_data: np.ndarray):
         axis = fig.add_subplot(111, projection='3d')
         axis.set_title("ASP Coverage Map")
@@ -47,8 +47,11 @@ class DisplayManager:
                 self._uav_location_plots.remove()
             except Exception:
                 pass
-        positions = np.array([uav.current_position for uav in self.env.uav_list])
-        colours = [colour_chart[uav.id] for uav in self.env.uav_list]
+        active_uavs = [uav for uav in self.env.uav_list if uav.start_time <= self.env.timestep and not uav.finished]
+        positions = np.array([uav.current_position for uav in active_uavs])
+        colours = [colour_chart[uav.id] for uav in active_uavs]
+        if positions.size == 0:
+            return
         self._uav_location_plots = axis.scatter(
             positions[:, 0] + 0.5,
             positions[:, 2] + 0.5,
@@ -56,6 +59,36 @@ class DisplayManager:
             c=colours, s=50
         )
 
+    def _display_uav_footprints(self, axis):
+        self._uav_footprints = []
+        uav_map = self.env.uav_map
+        # Build a dictionary mapping each UAV id to the list of voxel indices it occupies
+        footprints = {}
+        for idx in np.ndindex(uav_map.shape):
+            cell = uav_map[idx]  # cell is a list (could be empty) of UAV ids at this voxel
+            for uav_id in cell:
+                if uav_id not in footprints:
+                    footprints[uav_id] = []
+                footprints[uav_id].append(idx)
+        
+        # For each UAV, create a boolean mask from its footprint and display it
+        for uav_id, voxel_indices in footprints.items():
+            mask = np.zeros(uav_map.shape, dtype=bool)
+            for coord in voxel_indices:
+                mask[coord] = True
+            #Flip the axis
+            mask = np.swapaxes(mask, 1, 2)
+            self._uav_footprints.append(axis.voxels(
+                mask,
+                facecolors=colour_chart[uav_id],
+                edgecolors=colour_chart[uav_id],
+                alpha=0.03
+            ))
+
+
+
+        
+    
     def _remove_displayed_world(self, axis) -> None:
         """
         Remove the displayed world voxels from the axis.
@@ -110,6 +143,8 @@ class DisplayManager:
         self._remove_displayed_asps(axis)
         colours = [colour_chart[asp.id] for asp in self.env.asp_list]
         positions = np.array([asp.position for asp in self.env.asp_list])
+        if positions.size == 0:
+            return
         self._asps_plots = axis.scatter(
             positions[:, 0],
             positions[:, 2],
@@ -130,7 +165,8 @@ class DisplayManager:
         Display the planned routes of the UAVs.
         """
         self._remove_displayed_planned_routes(axis)
-        for uav in self.env.uav_list:
+        active_uavs = [uav for uav in self.env.uav_list]
+        for uav in active_uavs:
             if uav.planned_route:
                 route = np.array(uav.planned_route)
                 planned_route = np.array(route)
@@ -154,7 +190,8 @@ class DisplayManager:
         Display the destinations of the UAVs as numbers.
         """
         self._remove_displayed_destination_plots(axis)
-        for uav in self.env.uav_list:
+        active_uavs = [uav for uav in self.env.uav_list]
+        for uav in active_uavs:
             for idx, destination in enumerate(uav.destinations):
                 text = axis.text(
                     destination[0] + 0.6,
@@ -181,19 +218,18 @@ class DisplayManager:
         computed (for example, by calling self.detect_collisions()) prior to display.
         Voxels with a collision (True values) are highlighted in red.
         """
-        if not hasattr(self, 'collisions_map'):
-            return
-
-        collision_mask = self.collisions_map.transpose(0, 2, 1)
         self._remove_displayed_collisions(axis)
-        
-        if collision_mask.any():
+        if hasattr(self.env, 'collisions_map') and self.env.collisions_map is not None:
+            transposed_map = np.swapaxes(self.env.collisions_map, 1, 2)
+            face_color = mcolors.to_rgba('red')
+            edge_color = face_color[:3] + (0.01,)
             self._collision_voxels = axis.voxels(
-                collision_mask,
-                facecolors='red',
-                edgecolors='darkred',
+                transposed_map,
+                facecolors=face_color,
+                edgecolors=edge_color,
                 alpha=0.5
             )
+
 
     def _remove_displayed_collisions(self,axis):
          if hasattr(self, '_collision_voxels') and self._collision_voxels is not None:
@@ -219,7 +255,8 @@ class DisplayManager:
         self._display_world(axis)
         self._display_uavs(axis)
         self._display_asps(axis)
-        self._display_asp_coverage(axis)
+        #self._display_asp_coverage(axis)
+        self._display_uav_footprints(axis)
         self._display_planned_routes(axis)
         self._display_destinations(axis)
         self._display_collisions(axis)
@@ -235,17 +272,18 @@ class DisplayManager:
         self._remove_displayed_uavs(axis)
         self._remove_displayed_planned_routes(axis)
         self._remove_displayed_destination_plots(axis)
-        self._remove_displayed_asp_coverage(axis)
+        #self._remove_displayed_asp_coverage(axis)
         self._remove_displayed_collisions(axis)
         axis.clear()
         axis.set_xlim(0, self.env.world_data.shape[0])
         axis.set_ylim(0, self.env.world_data.shape[2])
         axis.set_zlim(0, self.env.world_data.shape[1])
         axis.view_init(elev=90, azim=-90)
-        self._display_asp_coverage(axis)
+        #self._display_asp_coverage(axis)
         self._display_world(axis)
         self._display_planned_routes(axis)
         self._display_destinations(axis)
+        self._display_uav_footprints(axis)
         self._display_collisions(axis)
         self._display_asps(axis)
         self._display_uavs(axis)

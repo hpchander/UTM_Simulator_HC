@@ -4,7 +4,7 @@ import matplotlib.colors as mcolors
 from simulator.environment.display import DisplayManager
 
 class Environment:
-    def __init__(self, world_data: np.ndarray,uav_mode: str = "wait-on-pass") -> None:
+    def __init__(self, world_data: np.ndarray,output_mode: int = 0,uav_mode: str = "wait-on-pass") -> None:
         self.world_data: np.ndarray = world_data
         self.render_world_data: np.ndarray = np.swapaxes(self.world_data, 1, 2)
         self.asp_list: List[Any] = []
@@ -18,12 +18,12 @@ class Environment:
         self.states: List[np.ndarray] = []
         self.collisions_map = None
         self.timestep: int = 0
-
+        
         self.candidate_paths: dict = {}
         self.active_candidate_path: Optional[int] = None
         self.schedule_index: int = 0
         self.uav_mode = uav_mode
-
+        self.output_mode = output_mode
         self.display_manager = None
 
 
@@ -36,10 +36,13 @@ class Environment:
             uav.reset_uav()
         self.states = []
         self.uav_map = np.empty(self.world_data.shape, dtype=object)
-        self._uav_map()
+        self.map_uavs()
         self.detect_collisions()
         
-
+    def set_output_mode(self, mode: int) -> None:
+        if mode not in [0,1,2,3]:
+            raise ValueError(f"Invalid output mode: {mode}")
+        self.output_mode = mode
 
     def add_candidate(self, candidate_id: int, schedule: dict) -> None:
         """
@@ -68,28 +71,35 @@ class Environment:
         self.timestep = 0
         self.uav_map = np.empty(self.world_data.shape, dtype=object)
 
-        self._uav_map()
+        self.map_uavs()
         self.detect_collisions()
+
+    def set_uav_mode(self, mode: str) -> None:
+        if mode not in ["wait-on-pass", "follow-candidate-path"]:
+            raise ValueError(f"Invalid UAV mode: {mode}")
+        self.uav_mode = mode
 
     def detect_completed(self) -> bool:
         """
         Check if all UAVs have reached their final destination.
         """
-        return all(uav.is_finished() for uav in self.uav_list)
+        if all(uav.is_finished() for uav in self.uav_list):
+            return True
+        return False
 
-    def run(self, output_mode=0) -> None:
+    def run(self) -> None:
         """
         Run the simulation using next_timestep() until all UAVs have finished.
         """
         consecutive_no_moves = 0
         total_movements = 0
-        collisions = 0
+        self.map_uavs()
+        collisions = self.detect_collisions()
         while not all(uav.is_finished() for uav in self.uav_list):
-            
-            moves_made = self.next_timestep(output_mode=output_mode)
+            moves_made,collision_count = self.next_timestep()
             total_movements += moves_made
-            collisions += self.collision_count()
-
+            collisions += collision_count
+            
             if moves_made == 0:
                 consecutive_no_moves += 1
             else:
@@ -125,13 +135,18 @@ class Environment:
         for i in range(100):
             if i not in taken_ids:
                 new_uav.id = i
+                if new_uav.name is None:
+                    new_uav.name = f"{i}"
                 break
         if new_uav.id == -1:
+            if new_uav.name is None:
+                new_uav.name = f"-1"
             raise ValueError("Could not assign a unique ID to the UAV.")
+        
         self.uav_list.append(new_uav)
 
     def display(self) -> None:
-        self._uav_map()
+        self.map_uavs()
         self.detect_collisions()
         self.display_manager = DisplayManager(self)
         fig = PLT.figure(figsize=(15, 20))
@@ -162,7 +177,7 @@ class Environment:
         
     def on_next_button_click(self, axis, fig) -> None:
         self.next_timestep()
-        self._uav_map()
+        self.map_uavs()
         self.detect_collisions()
         self.display_manager.update_display(axis, fig)
 
@@ -172,18 +187,29 @@ class Environment:
         self.display_manager.update_display(axis, fig)
 
     
-    def next_timestep(self, output_mode=0) -> int:
+    def next_timestep(self) -> int:
         if self.detect_completed():
-            return 0
+            return 0,0
         self.states.append(np.copy(self.uav_map))
         self.timestep += 1
         moves_made = 0
         # Precompute current positions and intended positions
         current_positions = {uav.id: uav.current_position for uav in self.uav_list if not uav.is_finished() or self.timestep < uav.start_time}
         intended_positions = {uav.id: uav.get_next_position() for uav in self.uav_list if not uav.is_finished() or self.timestep < uav.start_time}
-        if output_mode == 0:
+        if self.output_mode in [1,2]:
             print(f"Time {self.timestep}")
         # Build a candidate occupancy map: voxel -> list of UAV IDs planning to occupy that voxel.
+        
+        
+        if self.uav_mode == "wait-on-pass":
+            moves_made = self.WOP(intended_positions, current_positions)
+        elif self.uav_mode == "follow-candidate-path":
+            moves_made = self.follow_candidate_path(intended_positions)
+        self.map_uavs()
+        collision_count = self.detect_collisions()
+        return moves_made,collision_count
+    
+    def WOP(self, intended_positions: dict, current_positions: dict) -> None:
         candidate_map = np.empty(self.uav_map.shape, dtype=object)
         for idx in np.ndindex(self.uav_map.shape):
             candidate_map[idx] = []
@@ -195,32 +221,54 @@ class Environment:
             footprint = self.compute_footprint(uav, intended_positions[uav.id])
             for voxel in footprint:
                 candidate_map[voxel].append(uav.id)
-        if self.uav_mode == "wait-on-pass":
-            moves_made = self.wait_on_pass(intended_positions, candidate_map, current_positions, output_mode=output_mode)
+        moves_made = self.wait_on_pass(intended_positions, candidate_map,current_positions)
+        return moves_made
+    
+
+    def follow_candidate_path(self, intended_positions: dict) -> int:
+        """
+        Move each UAV to its next intended position based on provided paths
+        """
+        moves_made = 0
+        for uav in self.uav_list:
+            if uav.is_finished():
+                continue
+            if self.timestep <= uav.start_time:
+                continue
+            if uav.id not in intended_positions:
+                continue
+            if uav.current_position == intended_positions[uav.id]:
+                if self.output_mode in [1,2]:
+                    print(f"UAV {uav.name} waiting at {intended_positions[uav.id]}")
+            else:
+                if self.output_mode in [1,2]:
+                    print(f"UAV {uav.name} moving to {intended_positions[uav.id]}")
+                moves_made += 1
+            uav.move()
         return moves_made
 
         
-    def wait_on_pass(self,intended_positions,candidate_map,current_positions, output_mode = 0) -> None:
+    def wait_on_pass(self,intended_positions,candidate_map,current_positions) -> None:
         # Resolve conflicts: For each UAV, check if any voxel in its footprint has multiple candidates.
         # If so, choose one UAV per voxel (e.g., with lowest ID) to be allowed.
         moves_made = 0
         allowed_moves = {}  # UAV id -> True if allowed to move
         for uav in self.uav_list:
             if uav.is_finished():
+                allowed_moves[uav.id] = False
                 continue
-            if self.timestep < uav.start_time:
+            if self.timestep <= uav.start_time:
+                allowed_moves[uav.id] = False
                 continue
             allowed_moves[uav.id] = True  # assume allowed until conflict found
 
             footprint = self.compute_footprint(uav, intended_positions[uav.id])
             for voxel in footprint:
                 if len(candidate_map[voxel]) > 1:
-                    # Resolve conflict: allow UAV with lowest ID
                     allowed_uav = min(candidate_map[voxel])
                     if uav.id != allowed_uav:
                         allowed_moves[uav.id] = False
                         break
-                # Update positions
         for uav in self.uav_list:
             if uav.is_finished():
                 continue
@@ -236,13 +284,18 @@ class Environment:
             if uav.is_finished():
                 continue
             if allowed_moves[uav.id]:
-                if output_mode == 0:
-                    print(f"UAV {uav.id} moving to {intended_positions[uav.id]}")
-                moves_made += 1
-                uav.move()
+                if allowed_moves[uav.id] and uav.current_position == intended_positions[uav.id]:
+                    if self.output_mode in [1,2]:
+                        print(f"UAV {uav.name} waiting at {intended_positions[uav.id]}")
+                    uav.move()
+                elif allowed_moves[uav.id]:
+                    if self.output_mode in [1,2]:
+                        print(f"UAV {uav.name} moving to {intended_positions[uav.id]}")
+                    moves_made += 1
+                    uav.move()
             else:
-                if output_mode == 0:
-                    print(f"UAV {uav.id} waiting at {current_positions[uav.id]}")
+                if self.output_mode in [1,2]:
+                    print(f"UAV {uav.name} waiting at {current_positions[uav.id]}")
                 uav.wait()
         return moves_made
     
@@ -277,27 +330,52 @@ class Environment:
 
     def compute_footprint(self, uav, pos: tuple) -> List[tuple]:
         """
-        Given a UAV and a target position, return a list of voxel indices
-        that the UAV would occupy based on its inaccuracies.
+        Compute the footprint of a UAV at a given position.
+        The footprint is the set of voxels that the UAV may occupy.
         """
-        x, y, z = pos
-        horiz = uav.horizontal_accuracy if hasattr(uav, 'horizontal_accuracy') else 0
-        vert = uav.vertical_accuracy if hasattr(uav, 'vertical_accuracy') else 0
         footprint = []
-        # Convert position to integer voxel indices (assumes positions are given in same units as voxel indices)
-        x_min = max(0, int(x - horiz))
-        x_max = min(self.uav_map.shape[0] - 1, int(x + horiz))
-        y_min = max(0, int(y - vert))
-        y_max = min(self.uav_map.shape[1] - 1, int(y + vert))
-        z_min = max(0, int(z - horiz))
-        z_max = min(self.uav_map.shape[2] - 1, int(z + horiz))
-        for i in range(x_min, x_max + 1):
-            for j in range(y_min, y_max + 1):
-                for k in range(z_min, z_max + 1):
-                    footprint.append((i, j, k))
+        radius = uav.inaccuracy[0]
+        shape = uav.inaccuracy[1]
+        if shape == 0: #no corners
+            x_min = max(0, int(pos[0] - radius))
+            x_max = min(self.world_data.shape[0], int(pos[0] + radius) + 1)
+            y_min = max(0, int(pos[1] - radius))
+            y_max = min(self.world_data.shape[1], int(pos[1] + radius) + 1)
+            z_min = max(0, int(pos[2] - radius))
+            z_max = min(self.world_data.shape[2], int(pos[2] + radius) + 1)
+            for x in range(x_min, x_max):
+                for y in range(y_min, y_max):
+                    for z in range(z_min, z_max):
+                        distance = Math.sqrt(
+                            (x - pos[0]) ** 2 +
+                            (y - pos[1]) ** 2 +
+                            (z - pos[2]) ** 2
+                        )
+                        if distance <= radius:
+                            footprint.append((x, y, z))
+        elif shape == 1: #square
+            x_min = max(0, int(pos[0] - radius))
+            x_max = min(self.world_data.shape[0], int(pos[0] + radius) + 1)
+            y_min = max(0, int(pos[1] - radius))
+            y_max = min(self.world_data.shape[1], int(pos[1] + radius) + 1)
+            z_min = max(0, int(pos[2] - radius))
+            z_max = min(self.world_data.shape[2], int(pos[2] + radius) + 1)
+            for x in range(x_min, x_max):
+                for y in range(y_min, y_max):
+                    for z in range(z_min, z_max):
+                        footprint.append((x, y, z))
+        else:
+            raise ValueError("Invalid shape type")
+        
         return footprint
+
+
+
+
+
     
-    def _uav_map(self) -> None:
+    
+    def map_uavs(self) -> None:
         """
         Clear and repopulate the UAV map based on the current positions and inaccuracy of each UAV.
         
@@ -309,23 +387,17 @@ class Environment:
             self.uav_map[idx] = []
 
         for uav in self.uav_list:
-            x, y, z = uav.current_position
-            
-            horiz = uav.horizontal_accuracy if hasattr(uav, 'horizontal_accuracy') else 0
-            vert = uav.vertical_accuracy if hasattr(uav, 'vertical_accuracy') else 0
+            if self.timestep < uav.start_time:
+                continue
+            if uav.is_finished():
+                continue
+            footprint = self.compute_footprint(uav, uav.current_position)
+            for voxel in footprint:
+                self.uav_map[voxel].append(uav.id)
 
-            x_min = max(0, x - horiz)
-            x_max = min(self.uav_map.shape[0] - 1, x + horiz)
-            y_min = max(0, y - vert)
-            y_max = min(self.uav_map.shape[1] - 1, y + vert)
-            z_min = max(0, z - horiz)
-            z_max = min(self.uav_map.shape[2] - 1, z + horiz)
-            for i in range(x_min, x_max + 1):
-                for j in range(y_min, y_max + 1):
-                    for k in range(z_min, z_max + 1):
-                        self.uav_map[i, j, k].append(uav.id)
+        
 
-    def detect_collisions(self) -> None:
+    def detect_collisions(self) -> int:
         """
         Check for collisions between UAVs and the world.
         A collision is marked in self.collisions_map (a boolean array)
@@ -338,13 +410,19 @@ class Environment:
         for idx in np.ndindex(self.uav_map.shape):
             if len(self.uav_map[idx]) > 1:
                 for uav_id in self.uav_map[idx]:
-                    if self.uav_list[uav_id].is_finished():
+                    if self.uav_list[uav_id].is_finished() == True:
                         continue
+                    if self.uav_list[uav_id].start_time < self.timestep:
+                        continue
+                if self.output_mode in [1,2]:
+                    print(f"Time {self.timestep}")
+                    print(f"Collision detected at {idx} between UAVs {self.uav_map[idx]}")
                 self.collisions_map[idx] = True
             elif self.world_data[idx] == 1 and len(self.uav_map[idx]) > 0:
                 self.collisions_map[idx] = True
             else:
                 self.collisions_map[idx] = False
+        return np.sum(self.collisions_map)
 
     def collision_count(self) -> int:
         """

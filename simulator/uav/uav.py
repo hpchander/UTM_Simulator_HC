@@ -1,27 +1,29 @@
-from simulator.utils.shared_imports import np,byte_packer,byte_unpacker,uav_type
+from simulator.utils.shared_imports import np,uav_type
 
 class UAV:
-    def __init__(self, uav_type: int,destinations: list[tuple] = [(0,0,0)], horizontal_accuracy: int = 0,vertical_accuracy: int = 0, start_time: int = 0):
+    def __init__(self, uav_type: int,destinations: list[tuple] = [(0,0,0),(0,0,0)],inaccuracy = [0,0], start_time: int = 0,max_speed: int = 1,name: str = None):
         """
         Initialise a UAV object.
+        inaccuracies: inaccuracy array. [0] = directional [1] = lateral [2] = vertical override
         """
         if uav_type < 0 or 15 < uav_type:
             raise ValueError("Invalid UAV type. Must be between 0 - 15.")
-        self.id_types = byte_packer(uav_type,3)
-        
         self.uav_type = uav_type
         self.id = -1
+        self.name = name
         self.destinations = destinations
         self.units_moved = 0
         self.times_waited = 0
         self.connected_asp = None
         self.current_position = self.destinations[0]
+        self.previous_positions = []
         self.planned_route = (0,0,0,0)
         self.finished = False
         self.operational_status = 0
-        self.horizontal_accuracy = horizontal_accuracy
-        self.vertical_accuracy = vertical_accuracy
+        self.inaccuracy = inaccuracy
+        self.max_speed = max_speed if max_speed >= 1 else 1
         self.start_time = start_time
+        self.made_first_move = False
 
     def __str__(self):
         return f"UAV {self.id} -\n\tType:{uav_type[self.uav_type]}\n\tCurrent Position:{self.current_position} \n\tNext Position:{self.next_position}\n"
@@ -48,6 +50,9 @@ class UAV:
         self.current_position = self.destinations[0]
         self.times_waited = 0
         self.operational_status = 0
+        self.made_first_move = False
+        self.previous_positions = []
+        self.planned_route = (0,0,0,0)
 
     def get_next_position(self):
         """Return the next waypoint in the planned route without moving."""
@@ -64,6 +69,8 @@ class UAV:
             self.operational_status = 0
             self.times_waited += 1
             return
+        self.made_first_move = True
+        self.previous_positions.append(self.current_position)
         self.current_position = self.planned_route[self.units_moved][:3]
     
     def assign_path(self,new_path:list[tuple]):

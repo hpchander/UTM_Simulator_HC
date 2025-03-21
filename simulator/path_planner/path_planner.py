@@ -17,17 +17,6 @@ class PathPlanner(ABC):
         """
         pass
 
-    @staticmethod
-    def inflate_static_grid(world_grid: np.ndarray, horizontal_inflation: int, vertical_inflation: int) -> np.ndarray:
-        """
-        Inflate the static obstacles in the world grid.
-        """
-        struct_el = np.ones(
-            ( 2 * horizontal_inflation+1,2 * vertical_inflation + 1, 2 *  horizontal_inflation+1),
-            dtype=bool
-        )
-        inflated = binary_dilation(world_grid, structure=struct_el)
-        return inflated
 
 
 class AStarPlanner(PathPlanner):
@@ -41,14 +30,14 @@ class AStarPlanner(PathPlanner):
     def plan_path(self, environment) -> dict:
         """
         For each UAV in the environment, compute a candidate path from its current position
-        to its final destination using A* on a time-expanded, inflated grid.
+        to its final destination using A* on a time-expanded grid.
         Returns a dictionary mapping UAV IDs to their candidate path (a list of waypoints).
         """
         candidate_paths = {}
         latest_start_time = max([uav.start_time for uav in environment.uav_list])
         current_time = 0
         planned_uavs = []
-        while current_time < latest_start_time:
+        while current_time <= latest_start_time:
             current_time += 1
             #skip uavs that have not started yet
             for uav in environment.uav_list:
@@ -60,7 +49,7 @@ class AStarPlanner(PathPlanner):
                 
                 path = []
                 steps = uav.destinations.__len__()
-                inflated_grid = self.inflate_static_grid(environment.world_data, uav.horizontal_accuracy, uav.vertical_accuracy)
+                world = environment.world_data
 
                 
                 for i in range(steps):
@@ -70,7 +59,7 @@ class AStarPlanner(PathPlanner):
                     full_path = self.a_star_search(
                         start,
                         goal,
-                        inflated_grid,
+                        world,
                         max_time=100,
                         candidate_paths=candidate_paths,
                         uav_list=environment.uav_list
@@ -117,7 +106,9 @@ class AStarPlanner(PathPlanner):
             for uav in uav_list:
                 if uav.id in candidate_paths:
                     path = candidate_paths[uav.id]
-                    if len(path) > t and path[t] == (x, y, z, t):
+                    relative_t = t - uav.start_time
+                    if relative_t >= 0 and len(path) > relative_t and path[relative_t] == (x, y, z, t):
+                        #print(f"Collision detected at {node} for UAV {uav.id}")
                         return 50
             return 0
         
