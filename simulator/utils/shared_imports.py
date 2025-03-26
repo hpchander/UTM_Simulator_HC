@@ -4,6 +4,7 @@ import matplotlib.pyplot as PLT
 import matplotlib.widgets as WDG
 from abc import ABC, abstractmethod
 import csv
+from prettytable import PrettyTable
     
 colour_chart = ["red", "blue", "green", "yellow", "purple", "orange", "pink", "brown", "black"]
 

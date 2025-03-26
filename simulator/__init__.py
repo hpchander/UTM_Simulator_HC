@@ -6,3 +6,4 @@ from .collision.collision import CollisionDetector
 from .maps.maps import map1
 from .scheduler.scheduler import Scheduler
 from .path_planner.path_planner import AStarPlanner
+from .tester.tester import run_tests
