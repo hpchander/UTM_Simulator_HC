@@ -1,30 +1,25 @@
 from typing import Any, List, Optional
 from simulator.utils.shared_imports import np, Math
 from simulator.environment.display import DisplayManager
+from simulator.uav.uav import UAV
+from simulator.utils.shared_imports import Pos, State, TMState
+import simulator.utils.config as cfg
 
 class Environment:
-    def __init__(self, world_data: np.ndarray,output_mode: int = 0,uav_mode: str = "wait-on-pass") -> None:
+    def __init__(self, world_data: np.ndarray, output_mode: int = 0) -> None:
         self.world_data: np.ndarray = world_data
         self.render_world_data: np.ndarray = np.swapaxes(self.world_data, 1, 2)
-        self.asp_list: List[Any] = []
-        self.uav_list: List[Any] = []
-        self.asp_coverage: np.ndarray = np.empty(self.world_data.shape, dtype=object)
-        for idx in np.ndindex(self.asp_coverage.shape):
-            self.asp_coverage[idx] = []
-        self.map_asp_coverage()
-        
-        self.uav_map: np.ndarray = np.empty(self.world_data.shape, dtype=object)
+        self.uav_list: List[UAV] = []        
+        self.reservations = []
+        self.uav_map: dict = {}
         self.states: List[np.ndarray] = []
-        self.collisions_map = None
+        self.collisions_map = {}
         self.timestep: int = 0
-        
         self.candidate_paths: dict = {}
         self.active_candidate_path: Optional[int] = None
         self.schedule_index: int = 0
-        self.uav_mode = uav_mode
         self.output_mode = output_mode
         self.display_manager = None
-
 
     def reset_environment(self) -> None:
         """
@@ -34,12 +29,12 @@ class Environment:
         for uav in self.uav_list:
             uav.reset_uav()
         self.states = []
-        self.uav_map = np.empty(self.world_data.shape, dtype=object)
+        self.uav_map = {}
         self.map_uavs()
         self.detect_collisions()
         
     def set_output_mode(self, mode: int) -> None:
-        if mode not in [0,1,2,3]:
+        if mode not in [0, 1, 2, 3]:
             raise ValueError(f"Invalid output mode: {mode}")
         self.output_mode = mode
 
@@ -63,70 +58,64 @@ class Environment:
             # If a candidate route exists for the UAV, use it.
             if uav.id in candidate:
                 uav.planned_route = candidate[uav.id]
+                uav.start_time = uav.planned_route[0].time
             else:
                 print(f"Warning: No candidate path found for UAV {uav.id}. Check environment setup")
                 return
         self.states = []
         self.timestep = 0
-        self.uav_map = np.empty(self.world_data.shape, dtype=object)
-
+        self.uav_map = {}
         self.map_uavs()
         self.detect_collisions()
 
-    def set_uav_mode(self, mode: str) -> None:
-        if mode not in ["wait-on-pass", "follow-candidate-path"]:
-            raise ValueError(f"Invalid UAV mode: {mode}")
-        self.uav_mode = mode
 
     def detect_completed(self) -> bool:
         """
         Check if all UAVs have reached their final destination.
         """
-        if all(uav.is_finished() for uav in self.uav_list):
+        if len(self.uav_list) == 0:
             return True
-        return False
+        return all(uav.is_finished() for uav in self.uav_list)
 
-    def run(self) -> None:
+    def run(self) -> dict:
         """
         Run the simulation using next_timestep() until all UAVs have finished.
+        Accumulates movements and collisions, then returns a summary dictionary.
         """
         consecutive_no_moves = 0
         total_movements = 0
+        # Initialize collision counters
         self.map_uavs()
-        collisions = self.detect_collisions()
+        # Update collisions map
+        self.detect_collisions()
+        total_world_collisions, total_uav_collisions = self.collision_count()
+        
         while not all(uav.finished for uav in self.uav_list):
-            moves_made,collision_count = self.next_timestep()
+            moves_made, collision_count = self.next_timestep()  # collision_count is a tuple (world, uav)
             total_movements += moves_made
-            collisions += collision_count
+            total_world_collisions += collision_count[0]
+            total_uav_collisions += collision_count[1]
             
             if moves_made == 0:
                 consecutive_no_moves += 1
+                if consecutive_no_moves > 10:
+                    break
             else:
                 consecutive_no_moves = 0
-            
-            if consecutive_no_moves > 2:
-                #print("Deadlock detected. Exiting.")
-                break
-        
-        total_waited = sum(uav.times_waited for uav in self.uav_list)
-        if self.detect_completed():
-            #print(f"Simulation finished in {self.timestep} timesteps. Total movements: {total_movements} Total time waited: {total_waited}")
-            return {"success": True,"timesteps": self.timestep, "movements": total_movements, "waited": total_waited, "collisions": collisions}
-        else:
-            if (2 <= consecutive_no_moves): 
-                #print(f"Simulation finished in {self.timestep} timesteps. Total movements: {total_movements} Total time waited: {total_waited}")
-                return {"success": False,"timesteps": self.timestep, "movements": total_movements, "waited": total_waited, "collisions": collisions}
+        spawn_differences = 0
+        for uav in self.uav_list:
+            spawn_differences += uav.start_time - uav.minimum_start_time
 
-    def register_asp(self, new_asp: Any) -> None:
-        """Register an ASP object."""
-        taken_ids = [asp.id for asp in self.asp_list]
-        for i in range(100):
-            if i not in taken_ids:
-                new_asp.id = i
-                break
-        if new_asp.id == -1:
-            raise ValueError("Could not assign a unique ID to the ASP.")
-        self.asp_list.append(new_asp)
+        #total_waited = sum(uav.times_waited for uav in self.uav_list)
+        success = self.detect_completed()
+        return {
+            "success": success,
+            "timesteps": self.timestep,
+            "movements": total_movements,
+            "waited": spawn_differences,
+            "collisions": (total_world_collisions, total_uav_collisions)
+        }
+
 
     def register_uav(self, new_uav: Any) -> None:
         """Register a UAV object."""
@@ -139,153 +128,70 @@ class Environment:
                 break
         if new_uav.id == -1:
             if new_uav.name is None:
-                new_uav.name = f"-1"
+                new_uav.name = "-1"
             raise ValueError("Could not assign a unique ID to the UAV.")
-        
         self.uav_list.append(new_uav)
 
+    def set_reservations(self, reservations) -> None:
+        """
+        Set the reservations for the environment.
+        Reservations symbolize prebooked flight paths / other air traffic.
+        Consists of [(x,y,z,t)]
+        """
+        self.reservations = reservations
+    
     def display(self) -> None:
         self.display_manager = DisplayManager(self)
     
-    def next_timestep(self) -> int:
+    def next_timestep(self) -> tuple:
+        """
+        Advances the simulation by one timestep.
+        Returns a tuple: (moves_made, (world_collisions, uav_collisions)).
+        """
         if self.detect_completed():
-            return 0,0
-        self.states.append(np.copy(self.uav_map))
+            return 0, (0, 0)
         self.timestep += 1
         moves_made = 0
-        # Precompute current positions and intended positions
-        current_positions = {uav.id: uav.current_position for uav in self.uav_list if not uav.finished or self.timestep < uav.start_time}
-        intended_positions = {uav.id: uav.get_next_position() for uav in self.uav_list if not uav.finished or self.timestep < uav.start_time}
-        if self.output_mode in [1,2]:
+        # Precompute current and intended positions
+        current_positions = {
+            uav.id: uav.current_position
+            for uav in self.uav_list
+            if uav.start_time <= self.timestep and (not uav.finished or self.timestep <= uav.time_finished + 1)
+        }
+        intended_positions = {
+            uav.id: uav.get_next_position()
+            for uav in self.uav_list
+            if uav.start_time <= self.timestep and (not uav.finished or self.timestep <= uav.time_finished + 1)
+        }
+
+        if self.output_mode in [1, 2]:
             print(f"Time {self.timestep}")
         
-        
-        if self.uav_mode == "wait-on-pass":
-            moves_made = self.WOP(intended_positions, current_positions)
-        elif self.uav_mode == "follow-candidate-path":
-            moves_made = self.follow_candidate_path(intended_positions)
-        self.map_uavs()
-        collision_count = self.detect_collisions()
-        return moves_made,collision_count
-    
-    def WOP(self, intended_positions: dict, current_positions: dict) -> None:
-        candidate_map = np.empty(self.uav_map.shape, dtype=object)
-        for idx in np.ndindex(self.uav_map.shape):
-            candidate_map[idx] = []
-        for uav in self.uav_list:
-            if self.timestep < uav.start_time:
-                continue
-            if uav.finished:
-                continue
-            footprint = self.compute_footprint(uav, intended_positions[uav.id])
-            for voxel in footprint:
-                candidate_map[voxel].append(uav.id)
-        moves_made = self.wait_on_pass(intended_positions, candidate_map,current_positions)
-        return moves_made
-    
 
+        moves_made = self.follow_candidate_path(intended_positions)
+        
+        self.map_uavs()
+        # Update collisions map and get aggregated counts
+        self.detect_collisions()
+        return moves_made, self.collision_count()
+    
     def follow_candidate_path(self, intended_positions: dict) -> int:
         """
-        Move each UAV to its next intended position based on provided paths
+        Move each UAV to its next intended position based on the candidate paths.
         """
         moves_made = 0
         for uav in self.uav_list:
-            if uav.finished:
-                continue
-            if self.timestep <= uav.start_time:
-                continue
-            if uav.id not in intended_positions:
+            if uav.finished or self.timestep <= uav.start_time or uav.id not in intended_positions:
                 continue
             if uav.current_position == intended_positions[uav.id]:
-                if self.output_mode in [1,2]:
-                    print(f"UAV {uav.name} waiting at {intended_positions[uav.id]}")
+                if self.output_mode in [1, 2]:
+                    print(f"UAV {uav.name} waiting at {intended_positions[uav.id].x},{intended_positions[uav.id].y},{intended_positions[uav.id].z}")
             else:
-                if self.output_mode in [1,2]:
-                    print(f"UAV {uav.name} moving to {intended_positions[uav.id]}")
+                if self.output_mode in [1, 2]:
+                    print(f"UAV {uav.name} moving to ({intended_positions[uav.id].x},{intended_positions[uav.id].y},{intended_positions[uav.id].z})")
                 moves_made += 1
-            uav.move()
+            uav.move(self.timestep)
         return moves_made
-
-        
-    def wait_on_pass(self,intended_positions,candidate_map,current_positions) -> None:
-        # Resolve conflicts: For each UAV, check if any voxel in its footprint has multiple candidates.
-        # If so, choose one UAV per voxel (e.g., with lowest ID) to be allowed.
-        moves_made = 0
-        allowed_moves = {}  # UAV id -> True if allowed to move
-        for uav in self.uav_list:
-            if uav.finished:
-                allowed_moves[uav.id] = False
-                continue
-            if self.timestep <= uav.start_time:
-                allowed_moves[uav.id] = False
-                continue
-            allowed_moves[uav.id] = True  # assume allowed until conflict found
-
-            footprint = self.compute_footprint(uav, intended_positions[uav.id])
-            for voxel in footprint:
-                if len(candidate_map[voxel]) > 1:
-                    allowed_uav = min(candidate_map[voxel])
-                    if uav.id != allowed_uav:
-                        allowed_moves[uav.id] = False
-                        break
-        for uav in self.uav_list:
-            if uav.finished:
-                continue
-            for other in self.uav_list:
-                if other.finished or uav.id == other.id:
-                    continue
-                if (intended_positions[uav.id] == current_positions[other.id] and
-                    intended_positions[other.id] == current_positions[uav.id]):
-                    # both are trying to swap positions.
-                    allowed_moves[uav.id] = False
-                    allowed_moves[other.id] = False
-        for uav in self.uav_list:
-            if uav.finished:
-                continue
-            if allowed_moves[uav.id]:
-                if allowed_moves[uav.id] and uav.current_position == intended_positions[uav.id]:
-                    if self.output_mode in [1,2]:
-                        print(f"UAV {uav.name} waiting at {intended_positions[uav.id]}")
-                    uav.move()
-                elif allowed_moves[uav.id]:
-                    if self.output_mode in [1,2]:
-                        print(f"UAV {uav.name} moving to {intended_positions[uav.id]}")
-                    moves_made += 1
-                    uav.move()
-            else:
-                if self.output_mode in [1,2]:
-                    print(f"UAV {uav.name} waiting at {current_positions[uav.id]}")
-                uav.wait()
-        return moves_made
-    
-    def map_asp_coverage(self) -> None:
-        """
-        For each ASP, mark the voxels within its coverage radius.
-        Each voxel within range will have the ASP's id appended to its list.
-        """
-        for asp in self.asp_list:
-            position = asp.position  # Expected to be a tuple like (x, y, z)
-            radius = asp.radius
-
-            # Calculate the bounding box limits for the ASP's coverage
-            x_min = max(0, int(position[0] - radius))
-            x_max = min(self.world_data.shape[0], int(position[0] + radius) + 1)
-            y_min = max(0, int(position[1] - radius))
-            y_max = min(self.world_data.shape[1], int(position[1] + radius) + 1)
-            z_min = max(0, int(position[2] - radius))
-            z_max = min(self.world_data.shape[2], int(position[2] + radius) + 1)
-
-            for x in range(x_min, x_max):
-                for y in range(y_min, y_max):
-                    for z in range(z_min, z_max):
-                        # Compute Euclidean distance from the voxel to the ASP's position
-                        distance = Math.sqrt(
-                            (x - position[0]) ** 2 +
-                            (y - position[1]) ** 2 +
-                            (z - position[2]) ** 2
-                        )
-                        if distance <= radius:
-                            self.asp_coverage[x, y, z].append(asp.id)    
 
     def compute_footprint(self, uav, pos: tuple) -> List[tuple]:
         """
@@ -295,30 +201,30 @@ class Environment:
         footprint = []
         radius = uav.inaccuracy[0]
         shape = uav.inaccuracy[1]
-        if shape == 0: #no corners
-            x_min = max(0, int(pos[0] - radius))
-            x_max = min(self.world_data.shape[0], int(pos[0] + radius) + 1)
-            y_min = max(0, int(pos[1] - radius))
-            y_max = min(self.world_data.shape[1], int(pos[1] + radius) + 1)
-            z_min = max(0, int(pos[2] - radius))
-            z_max = min(self.world_data.shape[2], int(pos[2] + radius) + 1)
+        if shape == 0:  # no corners
+            x_min = max(0, int(pos.x - radius))
+            x_max = min(self.world_data.shape[0], int(pos.x + radius) + 1)
+            y_min = max(0, int(pos.y - radius))
+            y_max = min(self.world_data.shape[1], int(pos.y + radius) + 1)
+            z_min = max(0, int(pos.z - radius))
+            z_max = min(self.world_data.shape[2], int(pos.z + radius) + 1)
             for x in range(x_min, x_max):
                 for y in range(y_min, y_max):
                     for z in range(z_min, z_max):
                         distance = Math.sqrt(
-                            (x - pos[0]) ** 2 +
-                            (y - pos[1]) ** 2 +
-                            (z - pos[2]) ** 2
+                            (x - pos.x) ** 2 +
+                            (y - pos.y) ** 2 +
+                            (z - pos.z) ** 2
                         )
                         if distance <= radius:
                             footprint.append((x, y, z))
-        elif shape == 1: #square
-            x_min = max(0, int(pos[0] - radius))
-            x_max = min(self.world_data.shape[0], int(pos[0] + radius) + 1)
-            y_min = max(0, int(pos[1] - radius))
-            y_max = min(self.world_data.shape[1], int(pos[1] + radius) + 1)
-            z_min = max(0, int(pos[2] - radius))
-            z_max = min(self.world_data.shape[2], int(pos[2] + radius) + 1)
+        elif shape == 1:  # square
+            x_min = max(0, int(pos.x - radius))
+            x_max = min(self.world_data.shape[0], int(pos.x + radius) + 1)
+            y_min = max(0, int(pos.y - radius))
+            y_max = min(self.world_data.shape[1], int(pos.y + radius) + 1)
+            z_min = max(0, int(pos.z - radius))
+            z_max = min(self.world_data.shape[2], int(pos.z + radius) + 1)
             for x in range(x_min, x_max):
                 for y in range(y_min, y_max):
                     for z in range(z_min, z_max):
@@ -332,47 +238,46 @@ class Environment:
         Build a UAV map (using a dictionary for scalability) where for each UAV,
         we compute the union of its footprint over all positions traversed in the current turn.
         """
-        # Reset the UAV map
         self.uav_map = {}
-        
         for uav in self.uav_list:
-            # Skip UAVs that haven't started or are finished
-            if self.timestep < uav.start_time or uav.finished:
+            if self.timestep < uav.start_time or (uav.finished and uav.time_finished < self.timestep):
                 continue
-            
-            # Get all positions traversed in this turn + current_position in case of no movement
             positions = getattr(uav, 'traversed_positions', []) + [uav.current_position]
-            
-            # Compute the union of footprints from each position
             union_footprint = set()
             for pos in positions:
                 union_footprint.update(self.compute_footprint(uav, pos))
-            # Map the UAV id to each voxel in the union footprint
             for voxel in union_footprint:
                 self.uav_map.setdefault(voxel, []).append(uav.id)
 
-
-    def detect_collisions(self) -> int:
+    def detect_collisions(self) -> dict:
         """
         Iterate over UAV footprints and check for collisions.
+        For each voxel, determine if a world collision and/or UAV collision occurs.
+        Returns a dictionary mapping voxel locations to a tuple:
+        (world_collision, uav_collision)
         """
-        self.collisions_map = np.zeros(self.world_data.shape, dtype=bool)
-        
+        collisions = {}
         for voxel, uav_ids in self.uav_map.items():
-            # Check for collision between UAVs (more than one UAV in the same voxel)
-            if len(uav_ids) > 1:
+            uav_collision = len(uav_ids) > 1
+            world_collision = (self.world_data[voxel] == 1 and len(uav_ids) > 0)
+            key = State(voxel[0], voxel[1], voxel[2], self.timestep)
+
+            if key in self.reservations:
+                uav_collision += 1
+            if world_collision or uav_collision:
                 if self.output_mode in [1, 2]:
                     print(f"Time {self.timestep}")
-                    print(f"Collision detected at {voxel} between UAVs {uav_ids}")
-                self.collisions_map[voxel] = True
-            # Check for collisions with obstacles in the world
-            elif self.world_data[voxel] == 1 and len(uav_ids) > 0:
-                self.collisions_map[voxel] = True
-        return np.sum(self.collisions_map)
+                    print(f"Collision detected at {voxel}: world collision = {world_collision}, UAV collision = {uav_collision} with UAVs {uav_ids}")
+                collisions[voxel] = (world_collision, uav_collision)
+        self.collisions_map = collisions
+        return collisions
 
-
-    def collision_count(self) -> int:
+    def collision_count(self) -> tuple:
         """
         Count the number of collisions in the current state.
+        Returns a tuple: (number of world collisions, number of UAV collisions)
         """
-        return np.sum(self.collisions_map)
+        collisions = self.collisions_map.values()
+        world_collisions = sum(1 for collision in collisions if collision[0])
+        uav_collisions = sum(1 for collision in collisions if collision[1])
+        return world_collisions, uav_collisions
