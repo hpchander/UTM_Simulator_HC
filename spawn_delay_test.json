@@ -1,0 +1,32 @@
+{
+    "planners": {
+      "Manhattan": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": true,
+            "move_in_straight_line": false,
+            "same_y": false,
+            "higher_inaccuracy_penalty": false,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan_conflicts": true,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_waiting": true,
+            "manhattan": true
+          },
+          "beam_width": 1000
+    }
+  },
+    "scenarios": [
+        {
+          "name": "Scenario 1 - Unit Test Case - Spawn Delay",
+          "map": { "name": "narrow_corridor", "scale": 1, "repetitions": 0 },
+          "uavs": [
+            { "name":"red",   "uav_type":0, "destinations":[[0,0,0],[0,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"blue",  "uav_type":0, "destinations":[[0,0,0],[0,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 }
+          ],
+          "output_mode": 0
+      }
+    ]
+}
