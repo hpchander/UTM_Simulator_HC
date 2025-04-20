@@ -1,0 +1,180 @@
+{
+    "planners": {
+      "Oblivious": {"type":"Oblivious"},
+      "Non-Weighted": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": false,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": false
+        },
+        "beam_width": 100000,
+        "g_score_increment": 0.01
+      },
+    "Collision Avoidance Only": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": false,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": false,
+          "manhattan": false
+        },
+        "beam_width": 1000
+    },
+    "Manhattan": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": true,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": true,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": true,
+          "manhattan": false
+        },
+        "beam_width": 1000
+    },
+    "Manhattan with oscillation": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": true,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": true,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": true,
+          "incentivise_waiting": true,
+          "manhattan": false
+        },
+        "beam_width": 1000
+    },
+    "Manhattan with traffic penalty": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": true,
+          "move_in_straight_line": true,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": true,
+          "traffic_density_penalty": true,
+          "oscillation_penalty": false,
+          "incentivise_waiting": true,
+          "manhattan": false
+        },
+        "beam_width": 1000
+    },
+    "Manhattan with traffic penalty and oscillation": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": true,
+          "move_in_straight_line": true,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": true,
+          "traffic_density_penalty": true,
+          "oscillation_penalty": true,
+          "incentivise_waiting": true,
+          "manhattan": false
+        },
+        "beam_width": 1000
+    },
+    "Euclidean": {
+        "heuristics": {
+          "euclidean": true,
+          "avoid_indirect_collisions": true,
+          "avoid_direct_collisions": true,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": true
+        },
+        "beam_width": 1000
+    },
+    "Euclidean with Traffic Penalty": {
+        "heuristics": {
+          "euclidean": true,
+          "avoid_indirect_collisions": true,
+          "avoid_direct_collisions": true,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": true,
+          "oscillation_penalty": false,
+          "incentivise_waiting": true
+        },
+        "beam_width": 1000
+    }
+  },
+    "scenarios": [
+        {
+            "name": "Scenario 4 - Single Pathway",
+            "map": { "name": "great_wall", "scale": 1, "repetitions": 0 },
+            "uavs": [
+              { "name":"red",   "uav_type":0, "destinations":[[0,0,2],[5,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"blue",  "uav_type":0, "destinations":[[0,0,3],[6,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"green", "uav_type":0, "destinations":[[6,0,3],[0,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"purple", "uav_type":0, "destinations":[[6,0,3],[0,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"orange", "uav_type":0, "destinations":[[6,0,3],[0,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"cyan", "uav_type":0, "destinations":[[1,0,4],[6,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"cream", "uav_type":0, "destinations":[[0,0,3],[5,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"pink", "uav_type":0, "destinations":[[0,0,1],[6,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"gold", "uav_type":0, "destinations":[[0,0,3],[5,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+              { "name":"brown", "uav_type":0, "destinations":[[1,0,2],[5,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 }
+            ],
+            "output_mode": 3
+        },
+        {
+          "name": "Scenario 4 - Single Pathway 3 height",
+          "map": { "name": "great_wall", "scale": 1, "repetitions": 3 },
+          "uavs": [
+            { "name":"red",   "uav_type":0, "destinations":[[0,0,2],[5,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"blue",  "uav_type":0, "destinations":[[0,0,3],[6,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"green", "uav_type":0, "destinations":[[6,0,3],[0,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"purple", "uav_type":0, "destinations":[[6,0,3],[0,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"orange", "uav_type":0, "destinations":[[6,0,3],[0,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"cyan", "uav_type":0, "destinations":[[0,0,0],[6,0,1]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"cream","uav_type":0, "destinations":[[0,0,3],[6,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"gold", "uav_type":0, "destinations":[[0,0,1],[6,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"yellow", "uav_type":0, "destinations":[[0,0,3],[5,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+            { "name":"brown", "uav_type":0, "destinations":[[1,0,2],[5,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 }
+          ],
+          "output_mode": 0
+      }
+    ]
+}

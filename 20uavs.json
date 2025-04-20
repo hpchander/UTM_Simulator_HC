@@ -1,0 +1,91 @@
+{
+    "planners": {
+      
+      "Manhattan": {
+        "heuristics": {
+          "euclidean": true,
+          "avoid_indirect_collisions": true,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "combined_admissable": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": false,
+          "manhattan": true
+        },
+        "beam_width": 1000,
+        "ordering": {
+          "id": 4,
+          "inaccuracy": -0,
+          "max_speed": 2,
+          "distance": -1,
+          "delay": 3
+        }},
+        "Manhattan Conflicts": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": true,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "combined_admissable": false,
+          "manhattan_conflicts": true,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": false
+        },
+        "beam_width": 10000,
+        "ordering": {
+          "id": 4,
+          "inaccuracy": -0,
+          "max_speed": 2,
+          "distance": -1,
+          "delay": 3
+      }
+     }
+     
+    },
+    "scenarios": [
+      {
+        "name": "Scenario 1 - 20 UAVs",
+        "map": { "name": "blank", "scale": 4, "repetitions": 10 },
+        "uavs": [
+          { "name":"red",    "uav_type":0, "destinations":[[0,0,2],[16,0,13]], "inaccuracy":[0,0], "start_time":0, "max_speed":6 },
+          { "name":"blue",   "uav_type":0, "destinations":[[2,0,0],[16,0,4]], "inaccuracy":[0,0], "start_time":0, "max_speed":4 },
+          { "name":"green",  "uav_type":0, "destinations":[[17,0,1],[1,0,2]], "inaccuracy":[0,0], "start_time":2, "max_speed":2 },
+          { "name":"purple", "uav_type":0, "destinations":[[0,0,19],[19,0,19]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 },
+          { "name":"orange", "uav_type":0, "destinations":[[10,0,10],[0,0,0]], "inaccuracy":[0,0], "start_time":1, "max_speed":2 },
+          { "name":"teal",   "uav_type":0, "destinations":[[10,0,10],[0,0,2]], "inaccuracy":[0,0], "start_time":3, "max_speed":3 },
+            { "name":"yellow", "uav_type":0, "destinations":[[15,0,18],[5,0,5]], "inaccuracy":[0,0], "start_time":2, "max_speed":4 },
+            { "name":"pink",   "uav_type":0, "destinations":[[10,0,15],[1,1,10]], "inaccuracy":[0,0], "start_time":1, "max_speed":5 },
+            { "name":"brown",  "uav_type":0, "destinations":[[4,0,3],[2,2,2]], "inaccuracy":[0,0], "start_time":3, "max_speed":6 },
+            { "name":"lime",   "uav_type":0, "destinations":[[4,0,4],[3,3,1]], "inaccuracy":[0,0], "start_time":2, "max_speed":5 },
+            { "name":"magenta",  "uav_type":0, "destinations":[[4,0,5],[4,4,2]], "inaccuracy":[0,0], "start_time":1, "max_speed":6 },
+            { "name":"cyan",  "uav_type":0, "destinations":[[10,0,6],[5,5,5]], "inaccuracy":[0,0], "start_time":3, "max_speed":7 },
+            { "name":"grey",  "uav_type":0, "destinations":[[4,0,7],[6,6,4]], "inaccuracy":[3,0], "start_time":2, "max_speed":8 },
+            { "name":"black",  "uav_type":0, "destinations":[[0,0,0],[19,7,19]], "inaccuracy":[0,0], "start_time":1, "max_speed":9 },
+            { "name":"teal",   "uav_type":0,"destinations":[[19,1,1],[8,1,19]],"inaccuracy":[1,1],"start_time":0,"max_speed":10}
+        ],
+        "output_mode": 0
+      },
+      {
+        "name": "Scenario 4 - Large Map",
+        "map": { "name": "center_block", "scale": 20, "repetitions": 0 },
+        "uavs": [
+          { "name":"red",   "uav_type":0, "destinations":[[0,0,9],[90,0,90]], "inaccuracy":[0,1], "start_time":0, "max_speed":4 },
+          { "name":"blue",  "uav_type":0, "destinations":[[9,0,0],[2,0,1],[3,0,2]], "inaccuracy":[2,0], "start_time":0, "max_speed":5 },
+          { "name":"green", "uav_type":0, "destinations":[[9,0,9],[1,0,2]], "inaccuracy":[0,0], "start_time":1, "max_speed":7 }
+        ],
+        "reservations": [
+        ],
+        "output_mode": 0
+      }
+    ]}
+      
+  
