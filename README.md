@@ -34,3 +34,6 @@ Planners can take a "heuristic":{"manhattan_scaled":false,"same_y":true}
 "disable_collisions": bool,
 "enable_indirect_world_collisions": bool
 
+
+# Unit Tests
+Run "pytest"

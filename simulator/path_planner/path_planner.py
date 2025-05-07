@@ -27,7 +27,8 @@ class ObliviousPlanner:
     """
     A simplistic path planner that moves each UAV along
     an axis‐aligned Manhattan route from its start to each goal,
-    up to max_speed moves per timestep, ignoring obstacles.
+    up to max_speed moves per timestep, ignoring obstacles. Does not follow MAPF rules.
+    This is an example on how to implement multiple planners
     """
     def __init__(self):
         pass
@@ -38,7 +39,7 @@ class ObliviousPlanner:
         Returns: (candidate_paths, delay_counts, searched_counts)
         """
         candidate_paths: Dict[int, List[State]] = {}
-        # zero delay for every UAV
+        # zero delay for every UAV (because no collisions)
         delay_counts: Dict[int,int] = {uav.id: 0 for uav in environment.uav_list}
         searched_counts: Dict[int,int] = {uav.id: 0 for uav in environment.uav_list}
 
@@ -92,7 +93,7 @@ class AStarPlanner():
         disable_collisions - bool, disable partial collision checking"""
         self.heuristics = heuristics
         self.beam_width = beam_width
-        if (ordering == None):
+        if (ordering is None):
             ordering = cfg.DEFAULT_ORDERING
         self.ordering = ordering
         self.g_score_multiplier = g_score_multiplier
@@ -183,14 +184,18 @@ class AStarPlanner():
                 if node.time > prev_node.time:
                     prev_pos = Pos(prev_node.x, prev_node.y, prev_node.z)
                     prev_footprint = self.compute_footprint(uav, prev_pos)
-                    reservations = self.add_footprints_to_reservations(reservations, prev_footprint, uav.id, t)
+                    reservations = self.add_footprints_to_reservations(
+                        reservations, prev_footprint, uav.id, t
+                        )
         # Add the last footprint for the last time step
         last_pos = Pos(path[-1].x, path[-1].y, path[-1].z)
         last_footprint = self.compute_footprint(uav, last_pos)
         last_time = path[-1].time + 1
-        last_footprint = self.add_footprints_to_reservations(reservations, last_footprint, uav.id, last_time)
+        last_footprint = self.add_footprints_to_reservations(
+            reservations, last_footprint, uav.id, last_time
+            )
         return reservations
-    
+
 
     def order_uavs(
             self,
@@ -230,8 +235,6 @@ class AStarPlanner():
         uav_list.sort(key=sort_key)
         return uav_list
 
-    
-
     def plan_path(self, environment: Environment) -> Dict[int, List[State]]:
         """Plan a path for each UAV in the environment.
         Returns a dict mapping UAV ids to their candidate paths."""
@@ -243,7 +246,8 @@ class AStarPlanner():
             for state in environment.reservations:
                 reservations[state] = [-1]
         uav_list = environment.uav_list
-        #schedule times are the time at which each UAV is scheduled to start its route from the path planner
+        #schedule times are the time at which each UAV is scheduled
+        # to start its route from the path planner
         schedule_times = {uav.id: uav.start_time for uav in uav_list}
         delay_counts: Dict[int, int] = {uav.id: 0 for uav in uav_list}
 
@@ -283,8 +287,12 @@ class AStarPlanner():
                     delay_counts[uav.id] += 1
                     continue
                 #add uav starting positions to reservations if unoccupied
-                reservations = self.add_footprints_to_reservations(reservations, footprint, uav.id, current_time)
-                reservations = self.add_footprints_to_reservations(reservations, footprint, uav.id, current_time + 1)
+                reservations = self.add_footprints_to_reservations(
+                    reservations, footprint, uav.id, current_time
+                    )
+                reservations = self.add_footprints_to_reservations(
+                    reservations, footprint, uav.id, current_time + 1
+                    )
             for uav in to_plan:
                 # Check spawn-cell occupancy (ignore self)
                 spawn_pos = Pos(uav.destinations[0].x, uav.destinations[0].y, uav.destinations[0].z)
@@ -299,14 +307,20 @@ class AStarPlanner():
                             for dz in [-1, 0, 1]:
                                 if dx == 0 and dy == 0 and dz == 0:
                                     continue
-                                neighbour_key = State(voxel.x + dx, voxel.y + dy, voxel.z + dz, current_time)
+                                neighbour_key = State(
+                                    voxel.x + dx, voxel.y + dy, voxel.z + dz, current_time
+                                    )
                                 if not (0 <= neighbour_key.x < environment.world_data.shape[0] and
                                         0 <= neighbour_key.y < environment.world_data.shape[1] and
                                         0 <= neighbour_key.z < environment.world_data.shape[2]):
                                     continue  
                                 if neighbour_key in reservations:
-                                    if ((uav.id not in reservations[neighbour_key] and len(reservations[neighbour_key]) > 0) or 
-                                    (uav.id in reservations[neighbour_key] and len(reservations[neighbour_key]) > 1)):
+                                    if (
+                                        (uav.id not in reservations[neighbour_key] and
+                                         len(reservations[neighbour_key]) > 0
+                                         ) or (
+                                             uav.id in reservations[neighbour_key] and
+                                             len(reservations[neighbour_key]) > 1)):
                                         break
                                 free_neighbours += 1
                 if free_neighbours == 0:
@@ -320,10 +334,10 @@ class AStarPlanner():
                         occupied = True
                         break
                 #delay to next time step
-                if occupied == True or free_neighbours == 0:
-                        schedule_times[uav.id] += 1
-                        delay_counts[uav.id] += 1
-                        continue
+                if occupied is True or free_neighbours == 0:
+                    schedule_times[uav.id] += 1
+                    delay_counts[uav.id] += 1
+                    continue
 
                 # perform search to build path for the uav
                 full_path: List[State] = []
@@ -384,7 +398,8 @@ class AStarPlanner():
     ):
         """
         A* search from start (State) to goal (Pos) using TMState.
-        Returns a list of State (dropping moves_used) representing the found path, or None if no valid path is found.
+        Returns a list of State (dropping moves_used) representing the found path,
+        or None if no valid path is found.
         Inspired by the A* algorithm from GeeksForGeeks
         Source: https://www.geeksforgeeks.org/a-search-algorithm/
         """
@@ -401,17 +416,20 @@ class AStarPlanner():
             """Admissible heuristic when speed == 1 Euclidean distance to goal."""
             x, y, z, t, used = state
             return np.linalg.norm(np.array((x, y, z)) - np.array(goal.to_array()))
-        
+
         def euclidean_heuristic_scaled(state):
             """Admissible heuristic when speed > 1 Euclidean distance to goal."""
             x, y, z, t, used = state
             if 1 <= uav.max_speed:
-                return np.ceil(np.linalg.norm(np.array((x, y, z)) - np.array(goal.to_array())) / uav.max_speed)
+                return np.ceil(
+                    np.linalg.norm(np.array((x, y, z)) - np.array(goal.to_array()))
+                    / uav.max_speed)
             else:
                 return np.linalg.norm(np.array((x, y, z)) - np.array(goal.to_array()))
-        
+
         def manhattan_with_conflicts(state, goal: Pos, reservations, conflict_weight=10.0):
-            """Inadmissable heuristic that adds a penalty for each conflict between neighbour and goal."""
+            """Inadmissable heuristic that adds a penalty for
+            each conflict between neighbour and goal."""
             x, y, z, t, _ = state
             gx, gy, gz = goal.x, goal.y, goal.z
             # Basic Manhattan distance
@@ -429,7 +447,7 @@ class AStarPlanner():
                 if key in reservations:
                     penalty += conflict_weight * len(reservations[key])
             return man_dist + penalty
-        
+
         def manhattan(state, goal: Pos):
             """
             Basic Manhattan distance heuristic.
@@ -439,7 +457,7 @@ class AStarPlanner():
             # Basic Manhattan distance
             man_dist = abs(x - gx) + abs(y - gy) + abs(z - gz)
             return man_dist
-            
+
         def manhattan_scaled(state, goal: Pos,uav: UAV):
             """
             Scaled Manhattan distance heuristic.
@@ -453,7 +471,7 @@ class AStarPlanner():
             else:
                 man_dist = abs(x - gx) + abs(y - gy) + abs(z - gz)
             return man_dist
-        
+
         def reverse_manhattan(state, goal: Pos):
             """
             Reverse Manhattan distance heuristic.
@@ -464,9 +482,9 @@ class AStarPlanner():
             gx, gy, gz = goal.x, goal.y, goal.z
             # Basic Manhattan distance
             man_dist = abs(x - gx) + abs(y - gy) + abs(z - gz)
-            
+
             return -man_dist
-        
+
         def oscillation_penalty(state, came_from, weight=5.0):
             """
             Penalize moves that reverse the last displacement, 
@@ -490,7 +508,7 @@ class AStarPlanner():
             return 0.0
 
 
-        
+
         def traffic_density_penalty(state, reservations, neighborhood=1, time_horizon=3, weight=1.0):
             """
             Penalize high-traffic regions by counting reserved cells in spatiotemporal neighborhood.
@@ -502,7 +520,7 @@ class AStarPlanner():
                     if t <= tv <= t + time_horizon:
                         count += len(uavs)
             return weight * count
-        
+
         def avoid_indirect_collisions_heuristic(state, reservations, obstacles, uav) -> int:
             """
             Heuristic for indirect collisions with other UAVs and obstacles.
@@ -533,7 +551,7 @@ class AStarPlanner():
                 return (uav_collisions * 10000) + (world_collisions * 50)
             else:
                 return (uav_collisions * 10000) + (world_collisions * 10000)
-        
+
         def avoid_indirect_collisions_bool(state, reservations, obstacles, uav) -> bool:
             """
             Check if the UAV's footprint at the current state collides with any other UAVs or obstacles.
@@ -545,7 +563,7 @@ class AStarPlanner():
                     key = (node.x, node.y, node.z, t + i)
                     if key in reservations:
                         if uav.id in reservations[key]:
-                            if (len(reservations[key]) - 1 > 0 ):
+                            if len(reservations[key]) - 1 > 0:
                                 return True
                         else: return True
                     if self.enable_indirect_world_collisions is False:
@@ -555,12 +573,12 @@ class AStarPlanner():
                         key_next = (node.x, node.y, node.z, t +  1)
                         if key_next in reservations:
                             if uav.id in reservations[key_next]:
-                                if (len(reservations[key]) - 1 > 0 ):
+                                if len(reservations[key]) - 1 > 0:
                                     return True
                             else:
                                 return True
             return False
-        
+    
         def avoid_direct_collisions(state, reservations, uav):
             """
             heavily penalize direct collisions with other UAVs
@@ -574,7 +592,7 @@ class AStarPlanner():
                 if obstacles.get((state[0], state[1], state[2]), False):
                     return 1
             return 0
-        
+
         def move_from_goals(state, goals):
             """
             Incentivise UAVs to move away from UAV goals
@@ -584,7 +602,7 @@ class AStarPlanner():
             for goal in goals:
                 distance += abs(x - goal.x) + abs(y - goal.y) + abs(z - goal.z)
             return distance
-        
+
         def move_from_starts(state, starts):
             """
             Incentivise UAVs to move away from all currently known UAV starting positions.
@@ -594,14 +612,14 @@ class AStarPlanner():
             for start in starts:
                 distance -= abs(x - start.x) + abs(y - start.y) + abs(z - start.z)
             return -distance
-        
+
         def same_y(state,goal):
             """
             Incentivise UAVs to stay at the same altitude as their goal.
             """
             x, y, z, t, used = state
             return abs(y - goal.y) * 2
-        
+
         def incentivise_moving(state,came_from):
             """
             Incentivise UAVs to move by returning higher a
@@ -626,7 +644,7 @@ class AStarPlanner():
             """
             x, y, z, t, used = state
             return  ((grid.shape[1] - y ) * uav.inaccuracy[0]) / grid.shape[1]
-        
+
         def move_in_straight_line(state,came_from,goal,start):
             """
             Incentivise UAVs to move in a straight line based on previous movement
@@ -648,7 +666,7 @@ class AStarPlanner():
             else:
                 return 0
             return 0
-        
+
         def minimum_time_lower_bound(state, goal, max_speed):
             """
             returns lower bound on time-to-go: distance divided by max_speed
@@ -658,7 +676,7 @@ class AStarPlanner():
             return dist / max_speed
 
         while open_set:
-            
+
             if len(open_set) > beam_width:
                 open_set = heapq.nsmallest(beam_width, open_set, key=lambda x: x[0])
                 heapq.heapify(open_set)
@@ -670,7 +688,7 @@ class AStarPlanner():
                 while current in came_from:
                     current = came_from[current]
                     path.append(current)
-                
+
                 path.reverse()
                 return ([State(s[0], s[1], s[2], s[3]) for s in path],searched)
             if t >= max_time:
@@ -680,7 +698,9 @@ class AStarPlanner():
             if uav.max_speed == 1:
                 for dx, dy, dz in [(-1,0,0), (1,0,0), (0,-1,0), (0,1,0), (0,0,-1), (0,0,1)]:
                     nx, ny, nz = x + dx, y + dy, z + dz
-                    if 0 <= nx < grid.shape[0] and 0 <= ny < grid.shape[1] and 0 <= nz < grid.shape[2]:
+                    if (0 <= nx < grid.shape[0] and
+                        0 <= ny < grid.shape[1] and
+                        0 <= nz < grid.shape[2]):
                         if grid[nx, ny, nz] == 0:
                             key = (nx, ny, nz, t)
                             if key not in reservations or uav.id not in reservations[key]:
@@ -696,7 +716,9 @@ class AStarPlanner():
                             if abs(dx) + abs(dy) + abs(dz) != 1:
                                 continue
                             nx, ny, nz = x + dx, y + dy, z + dz
-                            if 0 <= nx < grid.shape[0] and 0 <= ny < grid.shape[1] and 0 <= nz < grid.shape[2]:
+                            if (0 <= nx < grid.shape[0] and
+                                0 <= ny < grid.shape[1] and
+                                0 <= nz < grid.shape[2]):
                                 if grid[nx, ny, nz] == 0:
                                     if used < uav.max_speed - 1:
                                         neighbor = (nx, ny, nz, t, used + 1)
@@ -714,7 +736,7 @@ class AStarPlanner():
                         # would overlap footprints in t or t+1
                         continue
                     filtered_neighbors.append(nbr)
-            
+
             for neighbor in filtered_neighbors:
                 tentative_g = (g_score[current] + self.g_score_increment) * self.g_score_multiplier
                 if neighbor not in g_score or tentative_g < g_score[neighbor]:
@@ -728,7 +750,9 @@ class AStarPlanner():
                     if self.heuristics.get("move_from_starts") is True:
                         h += move_from_starts(neighbor, starts)
                     if self.heuristics.get("avoid_indirect_collisions") is True:
-                        collision_score = avoid_indirect_collisions_heuristic(neighbor, reservations, obstacles, uav)
+                        collision_score = avoid_indirect_collisions_heuristic(
+                            neighbor, reservations, obstacles, uav
+                            )
                         if collision_score > 0 and self.disable_collisions is True:
                             break
                         h += collision_score
