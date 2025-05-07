@@ -25,7 +25,8 @@ The priority of UAV ordering is sorted in ascending order of the keys in the dic
 Planners in situations can take an ordering. Include a "ordering": {"id": 0,"delay": 1, "inaccuracy": 2, "max_speed": 3, "start_time": 4, "distance": 5}
 
 # Heuristics
-Planners can take a "heuristic":{"manhattan_scaled":false,"same_y":true}
+Planners can take a "heuristic":{"manhattan_scaled":false,"same_y":true}. 
+Look in other scenario files or path_planner for the full list.
 
 # Other planner inputs
 "beam_width": int,
