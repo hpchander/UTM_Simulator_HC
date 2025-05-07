@@ -15,9 +15,28 @@
             "incentivise_waiting": false,
             "manhattan": true
           },
-          "beam_width": 5,
+          "beam_width": 7,
           "g_score_increment":1,
-          "g_score_multiplier": 1.0
+          "g_score_multiplier": 1
+    },
+    "Manhattan with incentivize moving": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": true,
+            "move_in_straight_line": false,
+            "same_y": false,
+            "higher_inaccuracy_penalty": false,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan_conflicts": false,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_moving": true,
+            "manhattan": true
+          },
+          "beam_width": 6,
+          "g_score_increment":1,
+          "g_score_multiplier": 1
     }
   },
     "scenarios": [
@@ -26,7 +45,6 @@
           "map": { "name":"beam_width_example", "scale": 1, "repetitions": 0 },
           "uavs": [
             { "name":"red",   "uav_type":0, "destinations":[[3,0,3],[0,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 }
-
           ],
           "output_mode": 0
       }

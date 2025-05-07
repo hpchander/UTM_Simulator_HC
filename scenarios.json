@@ -1,7 +1,7 @@
 {
-    "planners": {
-      
-      "Without Move Froms": {
+  "planners": {
+    "Oblivious": {"type":"Oblivious"},
+    "Dijkstra": {
         "heuristics": {
           "euclidean": false,
           "avoid_indirect_collisions": false,
@@ -9,134 +9,103 @@
           "same_y": false,
           "higher_inaccuracy_penalty": false,
           "move_from_goals": false,
-          "move_from_starts": false
+          "move_from_starts": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": false,
+          "manhattan": false,
+          "manhattan_scaled": false,
+          "dijkstra": true
         },
-        "beam_width": 1000,
-        "ordering": {
-          "id": 4,
-          "inaccuracy": 0,
-          "max_speed": 1,
-          "distance": 2,
-          "delay": 3
-        }
+        "beam_width": 1000000,
+        "g_score_increment":1,
+        "g_score_multiplier": 1
       },
-      "With Move Froms": {
-        "disable_collisions": true,
+    "Manhattan inadmissable": {
         "heuristics": {
-          "euclidean": true,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": true,
-          "same_y": true,
-          "higher_inaccuracy_penalty": true,
-          "move_from_goals": false,
-          "move_from_starts": false
-        },
-        "beam_width": 5000,
-        "ordering": {
-          "id": 4,
-          "inaccuracy": -0,
-          "max_speed": 1,
-          "distance": -1,
-          "delay": 3
-        }
-      },
-      "Without Move Froms - 20 width": {
-        "heuristics": {
-          "euclidean": true,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": true,
-          "same_y": true,
-          "higher_inaccuracy_penalty": true,
-          "move_from_goals": false,
-          "move_from_starts": false
-        },
-        "beam_width": 1000,
-        "ordering": {
-          "id": 4,
-          "inaccuracy": 0,
-          "max_speed": 1,
-          "distance": 2,
-          "delay": 3
-        }
-      },
-      "Euclidean": {
-        "disable_collisions": true,
-        "heuristics": {
-          "euclidean": true,
-          "avoid_indirect_collisions": true,
-          "avoid_direct_collisions": true,
-          "move_in_straight_line": true,
-          "same_y": true,
-          "higher_inaccuracy_penalty": true,
+          "euclidean": false,
+          "avoid_indirect_collisions": false,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
           "move_from_goals": false,
           "move_from_starts": false,
           "manhattan_conflicts": false,
-          "traffic_density_penalty": true,
+          "traffic_density_penalty": false,
           "oscillation_penalty": false,
-          "incentivise_waiting": false
+          "incentivise_waiting": false,
+          "manhattan": true,
+          "manhattan_scaled": false
         },
-        "beam_width": 1000,
-        "ordering": {
-          "id": 4,
-          "inaccuracy": -0,
-          "max_speed": 2,
-          "distance": -1,
-          "delay": 4
-      }
-    },
-    "Manhattan conflicts with traffic penalty and oscillation": {
+        "beam_width": 1000000,
+        "g_score_increment":1,
+        "g_score_multiplier": 1
+      },
+      "Manhattan inadmissable - straight line": {
         "heuristics": {
           "euclidean": false,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": true,
-          "same_y": false,
-          "higher_inaccuracy_penalty": true,
-          "move_from_goals": false,
-          "move_from_starts": false,
-          "combined_admissable": true,
-          "manhattan_conflicts": true,
-          "traffic_density_penalty": true,
-          "oscillation_penalty": false,
-          "incentivise_waiting": false
-        },
-        "beam_width": 1000,
-        "ordering": {
-          "id": 4,
-          "inaccuracy": -0,
-          "max_speed": 2,
-          "distance": -1,
-          "delay": 4
-      }
-    },"Manhattan": {
-        "heuristics": {
-          "euclidean": false,
-          "avoid_indirect_collisions": true,
-          "avoid_direct_collisions": true,
+          "avoid_indirect_collisions": false,
           "move_in_straight_line": true,
           "same_y": true,
           "higher_inaccuracy_penalty": false,
           "move_from_goals": false,
           "move_from_starts": false,
-          "combined_admissable": false,
-          "manhattan_conflicts": true,
+          "manhattan_conflicts": false,
           "traffic_density_penalty": false,
           "oscillation_penalty": false,
           "incentivise_waiting": false,
-          "manhattan": false
+          "manhattan": true,
+          "manhattan_scaled": false
         },
-        "beam_width": 30,
-        "ordering": {
-          "id": 4,
-          "inaccuracy": -0,
-          "max_speed": 2,
-          "distance": -1,
-          "delay": 3
-      }
-    }
-    },
+        "beam_width": 1000000,
+        "g_score_increment":1,
+        "g_score_multiplier": 1
+      },
+  "Manhattan admissable": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": false,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_moving": false,
+          "manhattan": false,
+          "manhattan_scaled": true
+        },
+        "beam_width": 1000000,
+        "g_score_increment":1,
+        "g_score_multiplier": 1
+      },
+      "Manhattan admissable, straight line": {
+            "heuristics": {
+              "euclidean": false,
+              "avoid_indirect_collisions": false,
+              "move_in_straight_line": true,
+              "same_y": true,
+              "higher_inaccuracy_penalty": false,
+              "move_from_goals": false,
+              "move_from_starts": false,
+              "manhattan_conflicts": false,
+              "traffic_density_penalty": false,
+              "oscillation_penalty": false,
+              "incentivise_moving": false,
+              "manhattan": false,
+              "manhattan_scaled": true
+            },
+            "beam_width": 1000000,
+            "g_score_increment":1,
+            "g_score_multiplier": 1
+          }
+  },
     "scenarios": [
       {
-        "name": "Scenario 1",
+        "name": "Scenario 1 - Narrow City 3 - 3 UAVs",
         "map": { "name": "city_4", "scale": 0, "repetitions": 0 },
         "uavs": [
           { "name":"red",   "uav_type":0, "destinations":[[3,0,9],[9,0,3]], "inaccuracy":[0,0], "start_time":0, "max_speed":4 },
@@ -146,7 +115,7 @@
         "output_mode": 0
       },
       {
-        "name": "Scenario 2",
+        "name": "Scenario 2 - Blank map - 6 UAVs",
         "map": { "name": "blank", "scale": 0, "repetitions": 0 },
         "uavs": [
           { "name":"red",    "uav_type":0, "destinations":[[0,0,2],[3,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":6 },
@@ -171,14 +140,34 @@
         "output_mode": 0
       },
       {
-        "name": "Scenario 4 - Large Map",
-        "map": { "name": "center_block", "scale": 20, "repetitions": 0 },
+        "name": "Scenario 5 - Furthest Point Single Movement",
+        "map": { "name": "blank", "scale": 2, "repetitions": 0 },
         "uavs": [
-          { "name":"red",   "uav_type":0, "destinations":[[0,0,9],[90,0,90]], "inaccuracy":[3,1], "start_time":0, "max_speed":4 },
-          { "name":"blue",  "uav_type":0, "destinations":[[9,0,0],[2,0,1],[3,0,2]], "inaccuracy":[2,0], "start_time":0, "max_speed":5 },
-          { "name":"green", "uav_type":0, "destinations":[[9,0,9],[1,0,2]], "inaccuracy":[0,0], "start_time":1, "max_speed":7 }
+          { "name":"red", "uav_type":0, "destinations":[[0,0,0],[9,9,9]], "inaccuracy":[0,0], "start_time":0, "max_speed":1 }
         ],
-        "reservations": [
+        "output_mode": 0
+      },
+      {
+        "name": "Scenario 6 - Furthest Point Two Movements",
+        "map": { "name": "blank", "scale": 2, "repetitions": 0 },
+        "uavs": [
+          { "name":"red", "uav_type":0, "destinations":[[0,0,0],[9,9,9]], "inaccuracy":[0,0], "start_time":0, "max_speed":2 }
+        ],
+        "output_mode": 0
+      },
+      {
+        "name": "Scenario 7 - Furthest Point - [1,0] Inaccuracy",
+        "map": { "name": "blank", "scale": 2, "repetitions": 0 },
+        "uavs": [
+          { "name":"red", "uav_type":0, "destinations":[[0,0,0],[9,9,9]], "inaccuracy":[1,0], "start_time":0, "max_speed":1 }
+        ],
+        "output_mode": 0
+      },
+      {
+        "name": "Scenario 8 - Furthest Point Two Movements - [1,0] Inaccuracy",
+        "map": { "name": "blank", "scale": 2, "repetitions": 0 },
+        "uavs": [
+          { "name":"red", "uav_type":0, "destinations":[[0,0,0],[9,9,9]], "inaccuracy":[1,0], "start_time":0, "max_speed":2 }
         ],
         "output_mode": 0
       }

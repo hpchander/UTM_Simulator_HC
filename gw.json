@@ -1,7 +1,24 @@
 {
     "planners": {
       "Oblivious": {"type":"Oblivious"},
-      "Non-Weighted": {
+      "A*": {
+        "heuristics": {
+          "euclidean": false,
+          "avoid_indirect_collisions": false,
+          "move_in_straight_line": false,
+          "same_y": false,
+          "higher_inaccuracy_penalty": false,
+          "move_from_goals": false,
+          "move_from_starts": false,
+          "manhattan_conflicts": false,
+          "traffic_density_penalty": false,
+          "oscillation_penalty": false,
+          "incentivise_waiting": false,
+          "manhattan": true
+        },
+        "beam_width": 10000
+      },
+      "dijkstra": {
         "heuristics": {
           "euclidean": false,
           "avoid_indirect_collisions": false,
@@ -14,10 +31,10 @@
           "manhattan_conflicts": false,
           "traffic_density_penalty": false,
           "oscillation_penalty": false,
-          "incentivise_waiting": false
+          "incentivise_waiting": false,
+          "dijkstra": true
         },
-        "beam_width": 100000,
-        "g_score_increment": 0.01
+        "beam_width": 1000000
       },
     "Collision Avoidance Only": {
         "heuristics": {
