@@ -34,7 +34,7 @@ class Environment:
         self.detect_collisions()
         
     def set_output_mode(self, mode: int) -> None:
-        if mode not in [0, 1, 2, 3]:
+        if mode not in [0, 1, 2, 3,4,5,6]:
             raise ValueError(f"Invalid output mode: {mode}")
         self.output_mode = mode
 

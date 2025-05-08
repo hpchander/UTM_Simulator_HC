@@ -559,7 +559,7 @@ class AStarPlanner():
             x, y, z, t, used = state
             nodes = self.compute_footprint(uav, Pos(x, y, z))
             for node in nodes:
-                for i in range(0,1):
+                for i in range(0,2):
                     key = (node.x, node.y, node.z, t + i)
                     if key in reservations:
                         if uav.id in reservations[key]:
@@ -573,7 +573,7 @@ class AStarPlanner():
                         key_next = (node.x, node.y, node.z, t +  1)
                         if key_next in reservations:
                             if uav.id in reservations[key_next]:
-                                if len(reservations[key]) - 1 > 0:
+                                if len(reservations[key_next]) - 1 > 0:
                                     return True
                             else:
                                 return True
@@ -638,11 +638,13 @@ class AStarPlanner():
                     break
             return count
 
-        def higher_inaccuracy_penalty(state, uav,grid):
+        def higher_inaccuracy_penalty(state, uav,grid,goal):
             """
-            Incentivise inaccurate UAVs to maintain a higher altitude
+            Incentivise inaccurate UAVs to maintain a higher altitude whilst not above goal
             """
             x, y, z, t, used = state
+            if x == goal.x and z == goal.z:
+                return 0
             return  ((grid.shape[1] - y ) * uav.inaccuracy[0]) / grid.shape[1]
 
         def move_in_straight_line(state,came_from,goal,start):
@@ -695,37 +697,24 @@ class AStarPlanner():
                 continue
             neighbors = []
             #generate neighbors based on UAV max speed
-            if uav.max_speed == 1:
-                for dx, dy, dz in [(-1,0,0), (1,0,0), (0,-1,0), (0,1,0), (0,0,-1), (0,0,1)]:
-                    nx, ny, nz = x + dx, y + dy, z + dz
-                    if (0 <= nx < grid.shape[0] and
-                        0 <= ny < grid.shape[1] and
-                        0 <= nz < grid.shape[2]):
-                        if grid[nx, ny, nz] == 0:
-                            key = (nx, ny, nz, t)
-                            if key not in reservations or uav.id not in reservations[key]:
-                                neighbors.append((nx, ny, nz, t + 1, 0))
-
-                neighbors.append((x, y, z, t + 1, 0))
-            else:
-                for dx in [-1, 0, 1]:
-                    for dy in [-1, 0, 1]:
-                        for dz in [-1, 0, 1]:
-                            if dx == 0 and dy == 0 and dz == 0:
-                                continue
-                            if abs(dx) + abs(dy) + abs(dz) != 1:
-                                continue
-                            nx, ny, nz = x + dx, y + dy, z + dz
-                            if (0 <= nx < grid.shape[0] and
-                                0 <= ny < grid.shape[1] and
-                                0 <= nz < grid.shape[2]):
-                                if grid[nx, ny, nz] == 0:
-                                    if used < uav.max_speed - 1:
-                                        neighbor = (nx, ny, nz, t, used + 1)
-                                    else:
-                                        neighbor = (nx, ny, nz, t + 1, 0)
+            for dx, dy, dz in [(-1,0,0), (1,0,0), (0,-1,0), (0,1,0), (0,0,-1), (0,0,1)]:
+                nx, ny, nz = x + dx, y + dy, z + dz
+                if (0 <= nx < grid.shape[0] and
+                    0 <= ny < grid.shape[1] and
+                    0 <= nz < grid.shape[2]):
+                    if grid[nx, ny, nz] == 0:
+                        key = (nx, ny, nz, t)
+                        if key not in reservations or uav.id not in reservations[key]:
+                            if used < uav.max_speed - 1:
+                                neighbor = (nx, ny, nz, t, used + 1)
+                                neighbors.append(neighbor)
+                            else:
+                                if t + 1 < max_time:
+                                    neighbor = (nx, ny, nz, t + 1, 0)
                                     neighbors.append(neighbor)
-                neighbors.append((x, y, z, t + 1, 0))
+            key = (x, y, z, t + 1, 0)
+            if key not in reservations or uav.id not in reservations[key] and t + 1 < max_time:
+                neighbors.append((x, y, z, t + 1, 0)) # add wait state
             if self.disable_collisions is False:
                 filtered_neighbors = neighbors
             else:
@@ -766,7 +755,7 @@ class AStarPlanner():
                     if self.heuristics.get("same_y") is True:
                         h += same_y(neighbor,goal)
                     if self.heuristics.get("higher_inaccuracy_penalty") is True:
-                        h += higher_inaccuracy_penalty(neighbor, uav, grid)
+                        h += higher_inaccuracy_penalty(neighbor, uav, grid,goal)
                     if self.heuristics.get("traffic_density_penalty") is True:
                         h += traffic_density_penalty(neighbor, reservations)
                     if self.heuristics.get("manhattan") is True:

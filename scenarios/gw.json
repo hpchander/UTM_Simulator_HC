@@ -1,7 +1,7 @@
 {
     "planners": {
       "Oblivious": {"type":"Oblivious"},
-      "A*": {
+      "Manhattan Only": {
         "heuristics": {
           "euclidean": false,
           "avoid_indirect_collisions": false,
@@ -18,7 +18,7 @@
         },
         "beam_width": 10000
       },
-      "dijkstra": {
+      "Manhattan Scaled": {
         "heuristics": {
           "euclidean": false,
           "avoid_indirect_collisions": false,
@@ -27,19 +27,37 @@
           "higher_inaccuracy_penalty": false,
           "move_from_goals": false,
           "move_from_starts": false,
-          "manhattan": false,
           "manhattan_conflicts": false,
           "traffic_density_penalty": false,
           "oscillation_penalty": false,
           "incentivise_waiting": false,
-          "dijkstra": true
+          "manhattan": false,
+          "manhattan_scaled": true
         },
-        "beam_width": 1000000
+        "beam_width": 1000
       },
+        "dijkstra": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": false,
+            "move_in_straight_line": false,
+            "same_y": false,
+            "higher_inaccuracy_penalty": false,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan": false,
+            "manhattan_conflicts": false,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_waiting": false,
+            "dijkstra": true
+          },
+          "beam_width": 1000000
+        },
     "Collision Avoidance Only": {
         "heuristics": {
           "euclidean": false,
-          "avoid_indirect_collisions": false,
+          "avoid_indirect_collisions": true,
           "move_in_straight_line": false,
           "same_y": false,
           "higher_inaccuracy_penalty": false,
@@ -49,40 +67,6 @@
           "traffic_density_penalty": false,
           "oscillation_penalty": false,
           "incentivise_waiting": false,
-          "manhattan": false
-        },
-        "beam_width": 1000
-    },
-    "Manhattan": {
-        "heuristics": {
-          "euclidean": false,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": false,
-          "same_y": false,
-          "higher_inaccuracy_penalty": false,
-          "move_from_goals": false,
-          "move_from_starts": false,
-          "manhattan_conflicts": true,
-          "traffic_density_penalty": false,
-          "oscillation_penalty": false,
-          "incentivise_waiting": true,
-          "manhattan": false
-        },
-        "beam_width": 1000
-    },
-    "Manhattan with oscillation": {
-        "heuristics": {
-          "euclidean": false,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": false,
-          "same_y": false,
-          "higher_inaccuracy_penalty": false,
-          "move_from_goals": false,
-          "move_from_starts": false,
-          "manhattan_conflicts": true,
-          "traffic_density_penalty": false,
-          "oscillation_penalty": true,
-          "incentivise_waiting": true,
           "manhattan": false
         },
         "beam_width": 1000
@@ -90,70 +74,17 @@
     "Manhattan with traffic penalty": {
         "heuristics": {
           "euclidean": false,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": true,
-          "same_y": false,
-          "higher_inaccuracy_penalty": false,
-          "move_from_goals": false,
-          "move_from_starts": false,
-          "manhattan_conflicts": true,
-          "traffic_density_penalty": true,
-          "oscillation_penalty": false,
-          "incentivise_waiting": true,
-          "manhattan": false
-        },
-        "beam_width": 1000
-    },
-    "Manhattan with traffic penalty and oscillation": {
-        "heuristics": {
-          "euclidean": false,
-          "avoid_indirect_collisions": true,
-          "move_in_straight_line": true,
-          "same_y": false,
-          "higher_inaccuracy_penalty": false,
-          "move_from_goals": false,
-          "move_from_starts": false,
-          "manhattan_conflicts": true,
-          "traffic_density_penalty": true,
-          "oscillation_penalty": true,
-          "incentivise_waiting": true,
-          "manhattan": false
-        },
-        "beam_width": 1000
-    },
-    "Euclidean": {
-        "heuristics": {
-          "euclidean": true,
-          "avoid_indirect_collisions": true,
-          "avoid_direct_collisions": true,
+          "avoid_indirect_collisions": false,
           "move_in_straight_line": false,
           "same_y": false,
           "higher_inaccuracy_penalty": false,
           "move_from_goals": false,
           "move_from_starts": false,
-          "manhattan": false,
-          "manhattan_conflicts": false,
-          "traffic_density_penalty": false,
-          "oscillation_penalty": false,
-          "incentivise_waiting": true
-        },
-        "beam_width": 1000
-    },
-    "Euclidean with Traffic Penalty": {
-        "heuristics": {
-          "euclidean": true,
-          "avoid_indirect_collisions": true,
-          "avoid_direct_collisions": true,
-          "move_in_straight_line": false,
-          "same_y": false,
-          "higher_inaccuracy_penalty": false,
-          "move_from_goals": false,
-          "move_from_starts": false,
-          "manhattan": false,
           "manhattan_conflicts": false,
           "traffic_density_penalty": true,
           "oscillation_penalty": false,
-          "incentivise_waiting": true
+          "incentivise_waiting": true,
+          "manhattan_scaled": true
         },
         "beam_width": 1000
     }

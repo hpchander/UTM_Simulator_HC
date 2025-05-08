@@ -1,9 +1,12 @@
+
 from simulator.environment.environment import Environment
 from simulator.map.map import Map
 from simulator.uav.uav import UAV
 from simulator.utils.shared_imports import np
 from simulator.path_planner.path_planner import AStarPlanner
 from simulator.tester.tester import run_tests
+
+
 
 class Scenario():
     """
@@ -34,6 +37,6 @@ class Scenario():
         """
         Run the scenario with the given planners.
         """
-        run_tests(self.env, self.output_mode, planners=self.planners, all_candidate_paths=self.all_candidate_paths)
+        run_tests(self.env, self.output_mode, planners=self.planners, all_candidate_paths=self.all_candidate_paths,scenario_name=self.name)
 
     

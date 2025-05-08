@@ -1,0 +1,118 @@
+{
+    "planners": {
+      "Dijkstra": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": false,
+            "move_in_straight_line": false,
+            "same_y": false,
+            "higher_inaccuracy_penalty": false,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan_conflicts": false,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_waiting": false,
+            "manhattan": false,
+            "manhattan_scaled": false,
+            "dijkstra": true
+          },
+          "beam_width": 1000000,
+          "g_score_increment":1,
+          "g_score_multiplier": 1
+        },
+    "Optimised Manhattan Scaled": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": false,
+            "move_in_straight_line": true,
+            "same_y": true,
+            "higher_inaccuracy_penalty": true,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan_conflicts": false,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_moving": false,
+            "manhattan": false,
+            "manhattan_scaled": true
+          },
+          "beam_width": 1000000,
+          "g_score_increment":1,
+          "g_score_multiplier": 1
+        },
+    "Manhattan Scaled": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": false,
+            "move_in_straight_line": false,
+            "same_y": false,
+            "higher_inaccuracy_penalty": false,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan_conflicts": false,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_waiting": false,
+            "manhattan": true
+          },
+          "beam_width": 1000000,
+          "g_score_increment":1,
+          "g_score_multiplier": 1
+        },
+        "Manhattan Weighted": {
+          "heuristics": {
+            "euclidean": false,
+            "avoid_indirect_collisions": false,
+            "move_in_straight_line": false,
+            "same_y": false,
+            "higher_inaccuracy_penalty": false,
+            "move_from_goals": false,
+            "move_from_starts": false,
+            "manhattan_conflicts": false,
+            "traffic_density_penalty": false,
+            "oscillation_penalty": false,
+            "incentivise_waiting": false,
+            "manhattan_scaled": true
+          },
+          "beam_width": 1000000,
+          "g_score_increment":1,
+          "g_score_multiplier": 0.99
+        }
+    },
+      "scenarios": [
+        {
+          "name": "Path Length 7",
+          "map": { "name": "length_22", "scale": 1, "repetitions": 3 },
+          "uavs": [
+            { "name":"red",   "uav_type":0, "destinations":[[0,1,2],[7,1,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1}
+          ],
+          "output_mode": 0
+        },
+        {
+            "name": "Path Length 14",
+            "map": { "name": "length_22", "scale": 1, "repetitions": 3 },
+            "uavs": [
+              { "name":"red",   "uav_type":0, "destinations":[[0,1,2],[14,1,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1}
+            ],
+            "output_mode": 0
+        },
+        {
+            "name": "Path Length 21",
+            "map": { "name": "length_22", "scale": 1, "repetitions": 3 },
+            "uavs": [
+              { "name":"red",   "uav_type":0, "destinations":[[0,1,2],[21,1,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1}
+            ],
+            "output_mode": 0
+        },
+        {
+            "name": "Path Length 21 + 1 Vertical",
+            "map": { "name": "length_22", "scale": 1, "repetitions": 3 },
+            "uavs": [
+              { "name":"red",   "uav_type":0, "destinations":[[0,1,2],[21,0,2]], "inaccuracy":[0,0], "start_time":0, "max_speed":1}
+            ],
+            "output_mode": 0
+        }
+      ]}
+        
+    
